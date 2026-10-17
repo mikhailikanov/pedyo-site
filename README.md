@@ -76,6 +76,11 @@ they match. To reach the admin pages, register a normal account at
 update public.profiles set is_admin = true where email = 'you@example.com';
 ```
 
+That statement has to run from the SQL editor or a direct connection. `is_admin`, the
+`status`/`identity_reviewed`-style review columns and image `moderation_status` are frozen by
+triggers for anyone connecting as the `authenticated` role, because the owner-scoped policies
+otherwise let a signed-in provider promote themselves or approve their own listing.
+
 Two Auth settings matter here. **Confirm email is switched off** in Sign In / Providers,
 because Supabase's built-in test mailer caps out at roughly two emails an hour and answers
 with `over_email_send_rate_limit`; add your own SMTP credentials before turning it back on.

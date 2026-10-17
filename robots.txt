@@ -8,4 +8,4 @@ Disallow: /settings.html
 Disallow: /verification.html
 Disallow: /providers.html
 
-Sitemap: https://pedyo.pages.dev/sitemap.xml
+Sitemap: https://pedyo-site.pages.dev/sitemap.xml

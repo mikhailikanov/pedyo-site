@@ -61,18 +61,12 @@
             unless those checks have actually been performed and documented.
           </p>
 <div style="display:flex;flex-direction:column;gap:12px">
-            ${[
-              ['Email confirmed', 'Email address confirmed'],
-              ['Contact confirmed', 'Contact details verified by Pedyo'],
-              ['Identity reviewed', 'Government-issued ID reviewed by Pedyo'],
-              ['Business documents reviewed', 'Business registration documents reviewed'],
-              ['Founding provider', 'Early provider — does not imply identity or document verification']
-            ].map(([badge, desc]) =&gt; `
-              <div style="display:flex;align-items:flex-start;gap:12px;padding:12px;background:#fff;border-radius:8px;border:1px solid var(--color-border)">
-<span class="verify-badge" style="flex-shrink:0">✓ ${badge}</span>
-<span style="font-size:0.875rem;color:var(--color-text-muted)">${desc}</span>
-</div>`).join('')}
-          </div>
+<div style="display:flex;align-items:flex-start;gap:12px;padding:12px;background:#fff;border-radius:8px;border:1px solid var(--color-border)"><span class="verify-badge" style="flex-shrink:0">✓ Email confirmed</span><span style="font-size:0.875rem;color:var(--color-text-muted)">Email address confirmed</span></div>
+<div style="display:flex;align-items:flex-start;gap:12px;padding:12px;background:#fff;border-radius:8px;border:1px solid var(--color-border)"><span class="verify-badge" style="flex-shrink:0">✓ Contact confirmed</span><span style="font-size:0.875rem;color:var(--color-text-muted)">Contact details verified by Pedyo</span></div>
+<div style="display:flex;align-items:flex-start;gap:12px;padding:12px;background:#fff;border-radius:8px;border:1px solid var(--color-border)"><span class="verify-badge" style="flex-shrink:0">✓ Identity reviewed</span><span style="font-size:0.875rem;color:var(--color-text-muted)">Government-issued ID reviewed by Pedyo</span></div>
+<div style="display:flex;align-items:flex-start;gap:12px;padding:12px;background:#fff;border-radius:8px;border:1px solid var(--color-border)"><span class="verify-badge" style="flex-shrink:0">✓ Business documents reviewed</span><span style="font-size:0.875rem;color:var(--color-text-muted)">Business registration documents reviewed</span></div>
+<div style="display:flex;align-items:flex-start;gap:12px;padding:12px;background:#fff;border-radius:8px;border:1px solid var(--color-border)"><span class="verify-badge" style="flex-shrink:0">✓ Founding provider</span><span style="font-size:0.875rem;color:var(--color-text-muted)">Early provider — does not imply identity or document verification</span></div>
+</div>
 </div>
 <div style="background:linear-gradient(135deg,var(--green) 0%,var(--green-dark) 100%);border-radius:16px;padding:48px;text-align:center;color:#fff">
 <h2 style="font-size:var(--font-size-2xl);font-weight:800;margin-bottom:16px">Content Integrity</h2>
@@ -82,7 +76,7 @@
           </p>
 <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap">
 <a class="btn btn-accent btn-lg" href="/search.html">Find a Provider</a>
-<a class="btn btn-outline btn-lg" href="/account/become-provider.html" style="border-color:rgba(255,255,255,0.5);color:#fff">Become a Provider</a>
+<a class="btn btn-outline btn-lg on-dark" href="/account/become-provider.html">Become a Provider</a>
 </div>
 </div>
 </div>

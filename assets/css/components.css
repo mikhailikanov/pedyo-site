@@ -48,6 +48,10 @@
   color: var(--color-text);
 }
 .btn-outline:hover { border-color: var(--green); color: var(--green); background: var(--green-tint-2); }
+/* Outline button placed on a dark/green surface — .btn-outline's white fill would
+   swallow any light text colour set inline. */
+.btn-outline.on-dark { background: transparent; border-color: rgba(255,255,255,0.5); color: #fff; }
+.btn-outline.on-dark:hover { background: rgba(255,255,255,0.14); border-color: #fff; color: #fff; }
 .btn-ghost { background: transparent; color: var(--green); }
 .btn-ghost:hover { background: rgba(21,122,90,0.09); }
 .btn-danger { background: var(--color-danger); color: #fff; }

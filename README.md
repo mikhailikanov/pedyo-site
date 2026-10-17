@@ -199,6 +199,8 @@ GROQ_MODEL     (plain variable) openai/gpt-oss-120b
 ```
 
 Without `GROQ_API_KEY` the endpoint answers `503 not_configured` and the panel
-says it is not connected yet; every other feature is unaffected. Add the Pages
+says it is not connected yet; every other feature is unaffected. A secret saved
+*after* a build is not injected into that build, so the first one needs a retry
+from Deployments → Actions → Retry deployment (or any later push). Add the Pages
 project's domain to the Supabase Auth callback allow-list if you enable email
 links.

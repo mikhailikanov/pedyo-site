@@ -1004,3 +1004,139 @@ begin
   exception when duplicate_object then null;
   end;
 end $$;
+
+-- ------------------------------------------------------------
+-- Moderation guards
+--
+-- Owner-scoped policies say "you may update your own row" and RLS
+-- only ever sees the NEW row, so an authenticated PATCH could set
+-- profiles.is_admin or push a listing straight to 'approved'. These
+-- triggers compare old against new and keep every review outcome an
+-- admin decision. Direct connections (dashboard, migrations) carry no
+-- authenticated JWT and stay untouched.
+-- ------------------------------------------------------------
+
+create or replace function public.caller_can_moderate()
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  return coalesce(auth.jwt() ->> 'role', '') <> 'authenticated' or public.is_admin();
+exception when others then
+  return true;
+end;
+$$;
+
+create or replace function public.guard_profiles_privileges()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if public.caller_can_moderate() then
+    return new;
+  end if;
+  if new.is_admin is distinct from old.is_admin then
+    raise exception 'only an administrator can change the admin flag'
+      using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists profiles_privilege_guard on public.profiles;
+create trigger profiles_privilege_guard
+  before update on public.profiles
+  for each row execute function public.guard_profiles_privileges();
+
+create or replace function public.guard_provider_insert()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if public.caller_can_moderate() then
+    return new;
+  end if;
+  if new.status in ('approved', 'rejected', 'suspended')
+     or new.reviewed_by is not null
+     or new.reviewed_at is not null
+     or new.rejection_reason is not null
+     or new.email_confirmed or new.contact_confirmed
+     or new.identity_reviewed or new.business_docs_reviewed
+     or new.founding_provider then
+    raise exception 'a listing must start as draft or pending'
+      using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists provider_insert_guard on public.provider_profiles;
+create trigger provider_insert_guard
+  before insert on public.provider_profiles
+  for each row execute function public.guard_provider_insert();
+
+create or replace function public.guard_provider_update()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if public.caller_can_moderate() then
+    return new;
+  end if;
+  if new.status is distinct from old.status
+     and new.status in ('approved', 'rejected', 'suspended') then
+    raise exception 'only an administrator can approve, reject or suspend a listing'
+      using errcode = '42501';
+  end if;
+  if new.email_confirmed is distinct from old.email_confirmed
+     or new.contact_confirmed is distinct from old.contact_confirmed
+     or new.identity_reviewed is distinct from old.identity_reviewed
+     or new.business_docs_reviewed is distinct from old.business_docs_reviewed
+     or new.founding_provider is distinct from old.founding_provider
+     or new.reviewed_by is distinct from old.reviewed_by
+     or new.reviewed_at is distinct from old.reviewed_at
+     or new.rejection_reason is distinct from old.rejection_reason then
+    raise exception 'only an administrator can change review fields'
+      using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists provider_update_guard on public.provider_profiles;
+create trigger provider_update_guard
+  before update on public.provider_profiles
+  for each row execute function public.guard_provider_update();
+
+create or replace function public.guard_image_moderation()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if public.caller_can_moderate() then
+    return new;
+  end if;
+  if tg_op = 'INSERT' then
+    if new.moderation_status <> 'pending' then
+      raise exception 'images enter moderation as pending'
+        using errcode = '42501';
+    end if;
+  elsif new.moderation_status is distinct from old.moderation_status then
+    raise exception 'only an administrator can moderate images'
+      using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists provider_images_moderation_guard on public.provider_images;
+create trigger provider_images_moderation_guard
+  before insert or update on public.provider_images
+  for each row execute function public.guard_image_moderation();

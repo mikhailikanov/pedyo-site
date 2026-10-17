@@ -39,12 +39,12 @@ Trusted services,<br/>
 <div class="hero-stat-label">Providers</div>
 </div>
 <div>
-<div class="hero-stat-num" id="stat-categories">12</div>
+<div class="hero-stat-num" id="stat-categories">—</div>
 <div class="hero-stat-label">Categories</div>
 </div>
 <div>
-<div class="hero-stat-num">2</div>
-<div class="hero-stat-label">Cities</div>
+<div class="hero-stat-num" id="stat-reviews">—</div>
+<div class="hero-stat-label">Reviews</div>
 </div>
 </div>
 </div>
@@ -128,11 +128,11 @@ Trusted services,<br/>
           no vague "fully trusted" claims unless those checks have actually been performed.
         </p>
 <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center">
-<span class="verify-badge on-dark">✓ Email confirmed</span>
-<span class="verify-badge on-dark">✓ Contact confirmed</span>
-<span class="verify-badge on-dark">✓ Identity reviewed</span>
-<span class="verify-badge on-dark">✓ Business docs reviewed</span>
-<span class="verify-badge on-dark">✓ Founding provider</span>
+<span class="verify-badge on-dark"><svg class="icon icon-check" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 6 9 17l-5-5" /></svg> Email confirmed</span>
+<span class="verify-badge on-dark"><svg class="icon icon-check" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 6 9 17l-5-5" /></svg> Contact confirmed</span>
+<span class="verify-badge on-dark"><svg class="icon icon-check" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 6 9 17l-5-5" /></svg> Identity reviewed</span>
+<span class="verify-badge on-dark"><svg class="icon icon-check" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 6 9 17l-5-5" /></svg> Business docs reviewed</span>
+<span class="verify-badge on-dark"><svg class="icon icon-check" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 6 9 17l-5-5" /></svg> Founding provider</span>
 </div>
 <div style="margin-top:40px">
 <a class="btn btn-accent btn-lg" href="/account/become-provider.html">Become a Provider</a>
@@ -167,6 +167,7 @@ Trusted services,<br/>
     async function init() {
       const cats = await loadCategories();
       renderCategoryGrid(cats, document.getElementById('categories-grid'));
+      document.getElementById('stat-categories').textContent = cats.length || '—';
 
       // Populate hero select
       const sel = document.getElementById('hero-category');
@@ -182,6 +183,12 @@ Trusted services,<br/>
         .select('*', { count: 'exact', head: true })
         .eq('status', 'approved');
       document.getElementById('stat-providers').textContent = count || '0';
+
+      const { count: reviewCount } = await supabase
+        .from('reviews')
+        .select('*', { count: 'exact', head: true })
+        .eq('hidden', false);
+      document.getElementById('stat-reviews').textContent = reviewCount || '0';
 
       // Load featured providers
       const { providers } = await searchProviders({ limit: 6 });

@@ -1,4 +1,6 @@
 // Pedyo — Shared UI utilities
+import { icon } from './icons.js';
+
 export function escapeHtml(str) {
   if (!str) return '';
   return String(str)
@@ -28,10 +30,10 @@ export function formatTime(dateStr) {
 }
 
 export function showAlert(container, message, type = 'error') {
-  const icons = { error: '✕', success: '✓', info: 'ℹ', warning: '⚠' };
+  const icons = { error: 'x', success: 'check', info: 'info', warning: 'triangle-alert' };
   container.innerHTML = `
     <div class="alert alert-${type}" role="alert">
-      <span>${icons[type] || 'ℹ'}</span>
+      ${icon(icons[type] || 'info', { size: 16, stroke: 2.5 })}
       <span>${escapeHtml(message)}</span>
     </div>`;
 }
@@ -76,9 +78,10 @@ export function initTabs(container) {
 }
 
 export function renderStars(rating, max = 5) {
+  const star = icon('star', { size: 14 });
   let html = '<span class="stars">';
   for (let i = 1; i <= max; i++) {
-    html += `<span class="${i <= rating ? '' : 'empty'}">★</span>`;
+    html += `<span class="${i <= rating ? '' : 'empty'}">${star}</span>`;
   }
   html += '</span>';
   return html;
@@ -140,5 +143,6 @@ export function renderVerificationBadges(flags) {
   if (flags?.identity_reviewed)     badges.push('Identity reviewed');
   if (flags?.business_docs_reviewed) badges.push('Business docs reviewed');
   if (flags?.founding_provider)     badges.push('Founding provider');
-  return badges.map(b => `<span class="verify-badge">✓ ${escapeHtml(b)}</span>`).join('');
+  const tick = icon('check', { size: 12, stroke: 3 });
+  return badges.map(b => `<span class="verify-badge">${tick} ${escapeHtml(b)}</span>`).join('');
 }

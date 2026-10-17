@@ -946,13 +946,18 @@ create policy "storage_providers_public_read" on storage.objects
   for select to anon, authenticated using (bucket_id = 'providers');
 
 -- Owners write under their own uid prefix. upsert:true on avatars
--- means UPDATE on a fixed path must be allowed too.
+-- means UPDATE on a fixed path must be allowed too. storage.js names
+-- these paths avatars/<uid>/avatar.jpg, so the uid is folder two.
 drop policy if exists "storage_profiles_owner_write" on storage.objects;
 create policy "storage_profiles_owner_write" on storage.objects
   for all to authenticated using (
-    bucket_id = 'profiles' and (storage.foldername(name))[1] = auth.uid()::text
+    bucket_id = 'profiles'
+    and (storage.foldername(name))[1] = 'avatars'
+    and (storage.foldername(name))[2] = auth.uid()::text
   ) with check (
-    bucket_id = 'profiles' and (storage.foldername(name))[1] = auth.uid()::text
+    bucket_id = 'profiles'
+    and (storage.foldername(name))[1] = 'avatars'
+    and (storage.foldername(name))[2] = auth.uid()::text
   );
 
 drop policy if exists "storage_providers_owner_write" on storage.objects;

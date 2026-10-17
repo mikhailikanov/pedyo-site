@@ -35,7 +35,7 @@
 <!-- Edit modal -->
 <div class="modal-overlay hidden" id="edit-modal">
 <div class="modal" style="max-width:560px">
-<button class="modal-close" id="edit-modal-close">✕</button>
+<button class="modal-close" id="edit-modal-close"><svg class="icon icon-x" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg></button>
 <h2 style="font-size:1.25rem;font-weight:700;margin-bottom:20px">Edit Provider Profile</h2>
 <div id="edit-alert"></div>
 <form id="edit-form" style="display:flex;flex-direction:column;gap:16px">
@@ -78,11 +78,12 @@
     import { initNav } from '/assets/js/nav.js';
     import { supabase } from '/assets/js/supabase-client.js';
     import { getMyProviderProfiles, updateProviderProfile, submitForReview, saveProviderServices, saveServiceAreas, initServiceList } from '/assets/js/providers.js';
-    import { uploadProviderLogo, uploadGalleryImage } from '/assets/js/storage.js';
+    import { uploadGalleryImage } from '/assets/js/storage.js';
     import { showAlert, setLoading, escapeHtml, formatDate } from '/assets/js/ui.js';
+    import { icon } from '/assets/js/icons.js';
     import { requireAuth } from '/assets/js/auth.js';
 
-    document.getElementById('nav-placeholder').innerHTML = renderNav('');
+    document.getElementById('nav-placeholder').innerHTML = renderNav('listings');
     document.getElementById('footer-placeholder').innerHTML = renderFooter();
     initNav();
 
@@ -109,7 +110,7 @@
     if (!profiles.length) {
       listEl.innerHTML = `
         <div class="empty-state">
-          <div style="font-size:3rem;margin-bottom:16px">🏢</div>
+          <div style="color:var(--green);margin-bottom:16px"><svg class="icon icon-building-2" xmlns="http://www.w3.org/2000/svg" width="35" height="35" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" /><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" /><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" /><path d="M10 6h4" /><path d="M10 10h4" /><path d="M10 14h4" /><path d="M10 18h4" /></svg></div>
           <h3>No provider profiles yet</h3>
           <p>Create your first provider profile to start receiving customers.</p>
           <a href="/account/become-provider.html" class="btn btn-primary" style="margin-top:16px">Create Profile</a>
@@ -124,7 +125,7 @@
                 ${STATUS_BADGE[p.status] || ''}
               </div>
               <p style="font-size:0.875rem;color:var(--color-text-muted);margin-bottom:8px">${escapeHtml(p.description || 'No description')}</p>
-              ${p.status === 'rejected' && p.rejection_reason ? `<div class="alert alert-error" style="margin-bottom:8px"><span>✕</span><span>Rejected: ${escapeHtml(p.rejection_reason)}</span></div>` : ''}
+              ${p.status === 'rejected' && p.rejection_reason ? `<div class="alert alert-error" style="margin-bottom:8px">${icon('x', { size: 16, stroke: 2.5 })}<span>Rejected: ${escapeHtml(p.rejection_reason)}</span></div>` : ''}
               <div style="font-size:0.8rem;color:var(--color-text-muted)">Created ${formatDate(p.created_at)}</div>
             </div>
             <div style="display:flex;flex-direction:column;gap:8px;flex-shrink:0">

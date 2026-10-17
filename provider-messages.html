@@ -18,7 +18,8 @@
 <div class="conversations-list">
 <div class="conversations-header">
 <h2>Provider Inbox</h2>
-<p style="font-size:0.75rem;color:var(--color-text-muted);margin-top:4px">Messages from customers about your services</p>
+<p style="font-size:0.75rem;color:var(--color-text-muted);margin-top:4px">Messages from customers about your listings</p>
+<div id="inbox-switch" style="margin-top:12px"></div>
 </div>
 <div id="conv-list">
 <div style="padding:24px;text-align:center"><div class="spinner" style="margin:0 auto"></div></div>
@@ -34,13 +35,15 @@
 </div>
 <script type="module">
     import { renderNav } from '/assets/js/nav-html.js';
-    import { initNav } from '/assets/js/nav.js';
+    import { initNav, refreshUnreadBadge } from '/assets/js/nav.js';
     import { supabase } from '/assets/js/supabase-client.js';
     import { getProviderConversations, getMessages, sendMessage, markThreadRead, subscribeToConversation, renderConversationItem, renderMessage } from '/assets/js/conversations.js';
-    import { escapeHtml, avatarInitials, formatTime } from '/assets/js/ui.js';
+    import { escapeHtml, avatarInitials, formatTime, getQueryParam } from '/assets/js/ui.js';
+    import { setMode, modeSwitchHtml, inboxCounts, getMyListings } from '/assets/js/identity.js';
     import { requireAuth } from '/assets/js/auth.js';
 
-    document.getElementById('nav-placeholder').innerHTML = renderNav('');
+    setMode('provider');
+    document.getElementById('nav-placeholder').innerHTML = renderNav('inbox');
     initNav();
     if (!await requireAuth('/provider-messages.html')) throw new Error();
 
@@ -49,12 +52,27 @@
     let realtimeSub = null;
     let conversations = [];
 
+    async function paintSwitch() {
+      document.getElementById('inbox-switch').innerHTML =
+        modeSwitchHtml('provider', await inboxCounts(user.id));
+    }
+
+    async function refreshState() {
+      await Promise.all([loadConversations(), paintSwitch(), refreshUnreadBadge()]);
+    }
+
     async function loadConversations() {
       conversations = await getProviderConversations(user.id);
       const listEl = document.getElementById('conv-list');
 
       if (!conversations.length) {
-        listEl.innerHTML = '<div class="empty-state" style="padding:32px"><p>No customer messages yet.</p></div>';
+        const listings = await getMyListings(user.id);
+        listEl.innerHTML = listings.length
+          ? '<div class="empty-state" style="padding:32px"><p>No customer messages yet.</p></div>'
+          : `<div class="empty-state" style="padding:32px">
+               <p style="margin-bottom:12px">None of your listings are live yet, so no enquiries can arrive.</p>
+               <a class="btn btn-primary btn-sm" href="/account/become-provider.html">List a service</a>
+             </div>`;
         return;
       }
       listEl.innerHTML = conversations
@@ -77,10 +95,11 @@
       if (realtimeSub) { supabase.removeChannel(realtimeSub); realtimeSub = null; }
 
       const chatArea = document.getElementById('chat-area');
+      const listing = conv.provider_profiles?.business_name;
       chatArea.innerHTML = `
         <div class="chat-header">
           <div class="avatar avatar-customer">${avatarInitials(name)}</div>
-          <div><div style="font-weight:700">${escapeHtml(name)}</div><div style="font-size:0.75rem;color:var(--color-text-muted)">Customer</div></div>
+          <div><div style="font-weight:700">${escapeHtml(name)}</div><div style="font-size:0.75rem;color:var(--color-text-muted)">${escapeHtml(listing ? 'About ' + listing : 'Customer')}</div></div>
         </div>
         <div class="chat-messages" id="chat-messages"></div>
         <div class="chat-input-area">
@@ -96,7 +115,7 @@
       msgsEl.scrollTop = msgsEl.scrollHeight;
 
       await markThreadRead(convId);
-      loadConversations();
+      await refreshState();
 
       async function doSend() {
         const content = document.getElementById('chat-input').value.trim();
@@ -117,13 +136,33 @@
           msgsEl.innerHTML += renderMessage(msg, user.id);
           msgsEl.scrollTop = msgsEl.scrollHeight;
           if (activeConvId === convId) {
-            markThreadRead(convId).then(loadConversations);
+            markThreadRead(convId).then(refreshState);
           }
         }
       });
     }
 
-    loadConversations();
+    async function boot() {
+      await paintSwitch();
+      await loadConversations();
+      const wanted = getQueryParam('conv');
+      // Mirror of messages.html: honour the membership row, not the URL.
+      if (wanted && !conversations.some(c => c.id === wanted)) {
+        const { data } = await supabase
+          .from('conversation_members').select('inbox_type')
+          .eq('conversation_id', wanted).eq('user_id', user.id);
+        if ((data || []).some(m => m.inbox_type === 'personal')) {
+          location.replace(`/messages.html${location.search}`);
+          return;
+        }
+      }
+      if (!conversations.length) return;
+      // Deep link from a notification: /provider-messages.html?conv=<id>
+      const target = conversations.find(c => c.id === wanted) || conversations[0];
+      openConversation(target.id);
+    }
+
+    boot();
   </script>
 </body>
 </html>

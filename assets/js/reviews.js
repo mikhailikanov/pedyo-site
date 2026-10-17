@@ -1,6 +1,7 @@
 // Pedyo — Review submission and moderation
 import { supabase } from './supabase-client.js';
 import { escapeHtml, formatDate, renderStars } from './ui.js';
+import { icon } from './icons.js';
 
 export async function getProviderReviews(providerProfileId) {
   try {
@@ -62,8 +63,8 @@ export function renderReviewForm(onSubmit) {
       <form id="review-form">
         <div class="form-group" style="margin-bottom:16px">
           <label class="form-label">Rating</label>
-          <div id="star-picker" style="display:flex;gap:8px;font-size:2rem;cursor:pointer">
-            ${[1,2,3,4,5].map(i => `<span data-val="${i}" style="color:#CBD5E1">★</span>`).join('')}
+          <div id="star-picker" class="star-picker" role="radiogroup" aria-label="Your rating">
+            ${[1,2,3,4,5].map(i => `<button type="button" class="star-pick" role="radio" aria-checked="false" aria-label="${i} star${i > 1 ? 's' : ''}" data-val="${i}" style="color:#CBD5E1">${icon('star', { size: 30, cls: 'icon-filled' })}</button>`).join('')}
           </div>
           <input type="hidden" id="review-rating" value="0">
         </div>
@@ -82,21 +83,25 @@ export function initStarPicker() {
   const picker = document.getElementById('star-picker');
   const input  = document.getElementById('review-rating');
   if (!picker || !input) return;
-  const stars = picker.querySelectorAll('span');
-  let selected = 0;
+  const stars = [...picker.querySelectorAll('.star-pick')];
+  let selected = Number(input.value) || 0;
+
+  const paint = (upto) => stars.forEach(s => {
+    const val = +s.dataset.val;
+    s.style.color = val <= upto ? '#F4B942' : '#CBD5E1';
+    s.setAttribute('aria-checked', String(val === selected));
+  });
 
   stars.forEach(star => {
-    star.addEventListener('mouseover', () => {
-      const val = +star.dataset.val;
-      stars.forEach(s => s.style.color = +s.dataset.val <= val ? '#F4B942' : '#CBD5E1');
-    });
-    star.addEventListener('mouseout', () => {
-      stars.forEach(s => s.style.color = +s.dataset.val <= selected ? '#F4B942' : '#CBD5E1');
-    });
+    star.addEventListener('mouseover', () => paint(+star.dataset.val));
+    star.addEventListener('mouseout',  () => paint(selected));
+    star.addEventListener('focus',     () => paint(+star.dataset.val));
+    star.addEventListener('blur',      () => paint(selected));
     star.addEventListener('click', () => {
       selected = +star.dataset.val;
       input.value = selected;
-      stars.forEach(s => s.style.color = +s.dataset.val <= selected ? '#F4B942' : '#CBD5E1');
+      paint(selected);
     });
   });
+  paint(selected);
 }

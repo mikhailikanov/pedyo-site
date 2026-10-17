@@ -1,6 +1,7 @@
 // Pedyo — Shared navigation, footer and logo templates.
 // The mark is inline SVG so it stays crisp at any size and keeps its
 // two-tone colour on dark backgrounds (the old PNG needed a filter hack).
+import { viewingAsProvider } from './identity.js';
 const MARK_PATHS = (id) => `
   <defs>
     <linearGradient id="${id}" x1="4" y1="2" x2="20" y2="22" gradientUnits="userSpaceOnUse">
@@ -28,8 +29,7 @@ export function renderNav(activePage = '') {
     <div class="nav-links" id="nav-links">
       <a href="/services.html" class="nav-link ${activePage==='services'?'active':''}">Services</a>
       <a href="/search.html"   class="nav-link ${activePage==='search'?'active':''}">Find Providers</a>
-      <a href="/about.html"    class="nav-link ${activePage==='about'?'active':''}">About</a>
-      <a href="/contact.html"  class="nav-link ${activePage==='contact'?'active':''}">Contact</a>
+      ${providerLinks(activePage)}
     </div>
     <div class="nav-actions" id="nav-actions">
       <!-- Populated by nav.js -->
@@ -39,6 +39,20 @@ export function renderNav(activePage = '') {
     </button>
   </div>
 </nav>`;
+}
+
+// Browsing as a listing replaces the two company links with the two business
+// ones — About and Contact stay in the footer, and the link count is unchanged
+// so the bar cannot overflow.
+function providerLinks(activePage) {
+  if (!viewingAsProvider()) {
+    return `
+      <a href="/about.html"    class="nav-link ${activePage==='about'?'active':''}">About</a>
+      <a href="/contact.html"  class="nav-link ${activePage==='contact'?'active':''}">Contact</a>`;
+  }
+  return `
+      <a href="/providers.html"        class="nav-link ${activePage==='listings'?'active':''}">My Listings</a>
+      <a href="/provider-messages.html" class="nav-link ${activePage==='inbox'?'active':''}">Provider Inbox</a>`;
 }
 
 export function renderFooter() {

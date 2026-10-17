@@ -1,5 +1,6 @@
 // Pedyo — File upload, validation, compression
 import { supabase } from './supabase-client.js';
+import { icon } from './icons.js';
 
 const MAX_SIZE_MB = 5;
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -50,18 +51,6 @@ export async function uploadAvatar(userId, file) {
   return data.publicUrl;
 }
 
-export async function uploadProviderLogo(providerId, file) {
-  validateImage(file);
-  const compressed = await compressImage(file, 600, 0.9);
-  const path = `logos/${providerId}/logo.jpg`;
-  const { error } = await supabase.storage
-    .from('providers')
-    .upload(path, compressed, { upsert: true, contentType: 'image/jpeg' });
-  if (error) throw error;
-  const { data } = supabase.storage.from('providers').getPublicUrl(path);
-  return data.publicUrl;
-}
-
 export async function uploadGalleryImage(providerId, file) {
   validateImage(file);
   const compressed = await compressImage(file, 1200, 0.85);
@@ -107,7 +96,7 @@ export function renderImagePreview(url, container, onRemove) {
   img.style.cssText = 'width:100px;height:100px;object-fit:cover;border-radius:8px;border:1px solid var(--color-border)';
   const btn = document.createElement('button');
   btn.type = 'button';
-  btn.textContent = '✕';
+  btn.innerHTML = icon('x', { size: 12, stroke: 2.5 });
   btn.style.cssText = 'position:absolute;top:-6px;right:-6px;background:var(--color-danger);color:#fff;border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center';
   btn.onclick = () => { wrap.remove(); if (onRemove) onRemove(); };
   wrap.appendChild(img);

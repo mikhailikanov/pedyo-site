@@ -60,6 +60,8 @@
     import { supabase } from '/assets/js/supabase-client.js';
     import { updatePassword, requireAuth } from '/assets/js/auth.js';
     import { showAlert, setLoading } from '/assets/js/ui.js';
+    import { icon } from '/assets/js/icons.js';
+    import { notificationsAllowed, setNotifications, enableNotifications, showNotification } from '/assets/js/notify.js';
 
     document.getElementById('nav-placeholder').innerHTML = renderNav('');
     document.getElementById('footer-placeholder').innerHTML = renderFooter();
@@ -82,8 +84,16 @@
       }
       const perm = Notification.permission;
       if (perm === 'granted') {
-        notifStatus.innerHTML = '<span class="badge badge-green">✓ Notifications enabled</span>';
-        notifBtn.textContent = 'Disable Notifications';
+        if (notificationsAllowed()) {
+          notifStatus.innerHTML = `<span class="badge badge-green">${icon('check', { size: 12, stroke: 3 })} Notifications enabled</span>`;
+          notifBtn.textContent = 'Disable Notifications';
+          notifBtn.disabled = false;
+        } else {
+          notifStatus.innerHTML = '<span class="badge badge-gray">Notifications off</span>';
+          notifBtn.textContent = 'Enable Notifications';
+          notifBtn.disabled = false;
+        }
+        notifBlocked.classList.add('hidden');
       } else if (perm === 'denied') {
         notifStatus.innerHTML = '<span class="badge badge-red">Notifications blocked</span>';
         notifBtn.disabled = true;
@@ -91,18 +101,20 @@
       } else {
         notifStatus.innerHTML = '<span class="badge badge-gray">Notifications not enabled</span>';
         notifBtn.textContent = 'Enable Notifications';
+        notifBtn.disabled = false;
+        notifBlocked.classList.add('hidden');
       }
     }
     updateNotifUI();
 
     notifBtn.addEventListener('click', async () => {
-      if (Notification.permission === 'granted') {
-        localStorage.removeItem('pedyo_push_prompted');
-        notifStatus.innerHTML = '<span class="badge badge-gray">Notifications disabled</span>';
-        notifBtn.textContent = 'Enable Notifications';
+      if (notificationsAllowed()) {
+        setNotifications(false);
+        updateNotifUI();
         return;
       }
-      const result = await Notification.requestPermission();
+      const perm = await enableNotifications();
+      if (perm === 'granted') showNotification('Pedyo', 'Notifications are on. You will be alerted about new messages.');
       updateNotifUI();
     });
 

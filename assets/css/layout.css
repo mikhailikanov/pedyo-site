@@ -73,6 +73,38 @@
 .nav-dropdown-item.danger:hover { background: #FEECEC; }
 .nav-dropdown-divider { height: 1px; background: var(--color-border); margin: var(--space-2) 0; }
 
+/* Personal / provider view switch — used in the account menu and in the inbox sidebar */
+.nav-mode-switch {
+  display: flex; gap: 4px; padding: 4px;
+  background: var(--color-bg); border-radius: var(--radius-md);
+  margin: 0 var(--space-2) var(--space-2);
+}
+.nav-mode-btn {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 7px 8px; border: none; background: none; cursor: pointer;
+  border-radius: var(--radius-sm); font-size: var(--font-size-xs); font-weight: 600;
+  color: var(--color-text-muted); text-decoration: none; white-space: nowrap;
+  transition: background var(--transition), color var(--transition);
+}
+.nav-mode-btn:hover:not(:disabled) { color: var(--color-text); }
+.nav-mode-btn.active { background: #fff; color: var(--green-dark); box-shadow: var(--shadow-xs); }
+.nav-mode-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.nav-mode-switch.plain { margin: 0; background: none; padding: 0; }
+.nav-mode-switch.plain .nav-mode-btn {
+  background: var(--color-bg); border-radius: var(--radius-md);
+}
+.nav-mode-switch.plain .nav-mode-btn.active { background: var(--green); color: #fff; }
+
+/* Provider-mode flag in the nav bar — the shell must say who it is acting as */
+.nav-mode-flag {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 26px; padding: 0 9px;
+  background: var(--green-tint); color: var(--green-dark);
+  border: 1px solid #BFE6D5; border-radius: var(--radius-full);
+  font-size: 11px; font-weight: 700; letter-spacing: 0.01em;
+  max-width: 168px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
 /* ── Footer ─ */
 .footer {
   background:

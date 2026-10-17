@@ -19,7 +19,8 @@
 <div class="conversations-list">
 <div class="conversations-header">
 <h2>Messages</h2>
-<p style="font-size:0.75rem;color:var(--color-text-muted);margin-top:4px">Your conversations as a customer</p>
+<p style="font-size:0.75rem;color:var(--color-text-muted);margin-top:4px">Conversations where you are the customer</p>
+<div id="inbox-switch" style="margin-top:12px"></div>
 </div>
 <div id="conv-list">
 <div style="padding:24px;text-align:center"><div class="spinner" style="margin:0 auto"></div></div>
@@ -36,12 +37,16 @@
 </div>
 <script type="module">
     import { renderNav } from '/assets/js/nav-html.js';
-    import { initNav } from '/assets/js/nav.js';
+    import { initNav, refreshUnreadBadge } from '/assets/js/nav.js';
     import { supabase } from '/assets/js/supabase-client.js';
     import { getPersonalConversations, getMessages, sendMessage, markThreadRead, subscribeToConversation, renderConversationItem, renderMessage } from '/assets/js/conversations.js';
-    import { escapeHtml, avatarInitials, formatTime } from '/assets/js/ui.js';
+    import { escapeHtml, avatarInitials, formatTime, getQueryParam } from '/assets/js/ui.js';
+    import { setMode, modeSwitchHtml, inboxCounts } from '/assets/js/identity.js';
     import { requireAuth } from '/assets/js/auth.js';
 
+    // Opening this page is the intent to read the customer side; pin it before
+    // the nav template so the first paint cannot show the other shell.
+    setMode('personal');
     document.getElementById('nav-placeholder').innerHTML = renderNav('');
     initNav();
 
@@ -51,6 +56,15 @@
     let activeConvId = null;
     let realtimeSub = null;
     let conversations = [];
+
+    async function paintSwitch() {
+      document.getElementById('inbox-switch').innerHTML =
+        modeSwitchHtml('personal', await inboxCounts(user.id));
+    }
+
+    async function refreshState() {
+      await Promise.all([loadConversations(), paintSwitch(), refreshUnreadBadge()]);
+    }
 
     async function loadConversations() {
       conversations = await getPersonalConversations(user.id);
@@ -82,11 +96,13 @@
       if (realtimeSub) { supabase.removeChannel(realtimeSub); realtimeSub = null; }
 
       const chatArea = document.getElementById('chat-area');
+      const contact = conv.provider?.full_name;
       chatArea.innerHTML = `
         <div class="chat-header">
           <div class="avatar">${avatarInitials(name)}</div>
           <div>
             <div style="font-weight:700">${escapeHtml(name)}</div>
+            ${contact && contact !== name ? `<div style="font-size:0.75rem;color:var(--color-text-muted)">${escapeHtml(contact)}</div>` : ''}
           </div>
         </div>
         <div class="chat-messages" id="chat-messages"></div>
@@ -105,7 +121,7 @@
       msgsEl.scrollTop = msgsEl.scrollHeight;
 
       await markThreadRead(convId);
-      loadConversations();
+      await refreshState();
 
       // Send
       const sendBtn = document.getElementById('send-btn');
@@ -134,13 +150,35 @@
           // read the moment it arrives — otherwise the badge count
           // drifts until the page is reloaded.
           if (activeConvId === convId) {
-            markThreadRead(convId).then(loadConversations);
+            markThreadRead(convId).then(refreshState);
           }
         }
       });
     }
 
-    loadConversations();
+    async function boot() {
+      await paintSwitch();
+      await loadConversations();
+      const wanted = getQueryParam('conv');
+      // A link made before the two inboxes were separated can name a thread
+      // that lives on the provider side. Follow the membership row rather
+      // than showing an empty list next to a badge that counts it.
+      if (wanted && !conversations.some(c => c.id === wanted)) {
+        const { data } = await supabase
+          .from('conversation_members').select('inbox_type')
+          .eq('conversation_id', wanted).eq('user_id', user.id);
+        if ((data || []).some(m => m.inbox_type === 'provider')) {
+          location.replace(`/provider-messages.html${location.search}`);
+          return;
+        }
+      }
+      if (!conversations.length) return;
+      // Deep link from a notification: /messages.html?conv=<id>
+      const target = conversations.find(c => c.id === wanted) || conversations[0];
+      openConversation(target.id);
+    }
+
+    boot();
   </script>
 </body>
 </html>

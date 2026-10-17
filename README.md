@@ -15,7 +15,8 @@ by an admin before going public. Both sides can message in-app.
 - **Supabase** — Postgres with row-level security, Storage for images, and
   Realtime for messaging. The client is `supabase-js` v2 imported from jsDelivr
   as an ESM module, so there is no `node_modules` in the deployed site.
-- **Cloudflare Pages** for hosting (`_headers` and `_redirects` at the root).
+- **Cloudflare Pages** for hosting (`_headers` and `_redirects` at the root), with
+  one **Pages Function** in `functions/` proxying the AI concierge to Groq.
 
 ## Layout
 
@@ -23,10 +24,12 @@ by an admin before going public. Both sides can message in-app.
 /                       public pages (index, search, provider, services, about, contact)
 /account/               auth, profile, become-a-provider, settings
 /admin/                 moderation queue: providers, images, docs, reports, reviews, categories, users
-/messages.html          customer inbox
-/provider-messages.html provider inbox
+/messages.html          customer side of the account
+/provider-messages.html provider side of the same account
+/functions/ai-chat.js   the concierge proxy — the only server-side code in the repo
 /assets/css/            reset → tokens → components → layout → pages (load order matters)
-/assets/js/             ES modules: supabase-client, auth, providers, conversations, reviews, storage, admin
+/assets/js/             ES modules: supabase-client, auth, identity, nav, assistant, providers,
+                        reviews, conversations, storage, notify, icons, ui, admin
 /supabase/schema.sql    tables, RLS, triggers, grants, storage buckets
 /supabase/seed.sql      demo categories, providers, services, areas, reviews
 ```
@@ -113,10 +116,89 @@ Things that are not obvious from the code and are easy to break:
   rather than a policy.
 - **RLS policies are permissive and therefore OR-ed.** Adding a broad read policy
   re-widens access for everyone; the moderation gates depend on that not happening.
+- **The avatar path and its policy are one contract.** `uploadAvatar()` writes
+  `avatars/<uid>/avatar.jpg` and the `profiles` bucket policy reads the uid out of
+  `storage.foldername(name)[2]`. Change the path without the policy and every
+  upload fails with "new row violates row-level security policy".
+- **Notifications are generated server-side.** A trigger on `messages` fans rows
+  out into `notifications` for every member except the sender. The client never
+  inserts them; `assets/js/notify.js` only decides whether a granted browser
+  alert is shown for a row that arrives.
+- **The nav badge counts membership rows, never `notifications`.** One account
+  sits on both sides of different threads, and a notifications row does not say
+  which side it landed on, so counting them puts a provider's unread mail on the
+  customer page. `unreadMessages()` sums `conversation_members.unread_count`
+  where `inbox_type` matches the inbox being viewed.
+- **Browsing as a listing is a shell state, not a session.** `assets/js/identity.js`
+  keeps the mode and the active listing in `localStorage`, and everything that
+  depends on it (the inbox link, the account menu, the nav links, the badge) is
+  read from there. An inbox page pins the mode *before* `renderNav()`, because
+  the nav template paints synchronously and cannot wait for the listings query.
+- **Inserting a conversation must not ask for the row back.** `conversations` is
+  read through `is_conversation_member(id)`, which a brand-new row cannot satisfy
+  yet, so `insert().select()` fails with a row-level-security error. Insert, then
+  look the id up — which is what `startConversation()` does.
+
+## Provider concierge
+
+A chat dock in the bottom-right corner of every public page (`assets/js/assistant.js`,
+mounted from `initNav()` so no page has to carry the markup). It answers "who can fix a
+leaking geyser in Borrowdale?" with real listings, not prose.
+
+- **The key never reaches the browser.** The panel POSTs to `/ai-chat`;
+  `functions/ai-chat.js` holds `GROQ_API_KEY` as a Pages environment binding and makes the
+  Groq call server-side. Locally `npx wrangler pages dev .` runs the same module alongside the
+  static files; a plain static server has no `/ai-chat`, and the panel then honestly reports
+  that the concierge is not connected.
+- **It cannot invent a business.** The prompt is closed-world: the model only sees the
+  approved listings the browser found in Supabase (`searchProviders`, `status='approved'`,
+  best-rated first, cached for the tab) and replies with `{reply, picks:[slug]}`. Every slug
+  is checked back against that list, and the panel builds links by looking the slug up in
+  its own pool, so an unknown slug renders nothing.
+- **Nothing to recommend is a real answer.** With few or no approved listings the concierge
+  says so and points at the Services page rather than guessing — the same holds for a job
+  no listing covers.
+- **Costs are bounded by prompt size.** Groq metered accounts are capped on tokens per
+  minute and every candidate costs prompt tokens, so the browser forwards a 12-listing
+  shortlist ranked by the customer's own words and the proxy caps the dump at
+  `MAX_CANDIDATES`. A 429 from Groq is returned as 429, which the panel reports as "busy,
+  try again in a few seconds" instead of a broken assistant.
+- **Retired model ids are the usual outage.** `llama-3.3-70b-versatile` no longer resolves
+  on this account; the working ids at time of writing are `openai/gpt-oss-120b` (default),
+  `openai/gpt-oss-20b` and `qwen/qwen3.8-27b`. Override without a code change with the
+  `GROQ_MODEL` binding, and check `GET /openai/v1/models` when it starts answering 502.
+- Chat history lives in `sessionStorage`, so clicking through to a listing and back keeps
+  the conversation. The five starter chips, the "start over" button and `Esc` all behave as
+  labelled. It is deliberately absent from `/admin/` and from the five auth pages, which do
+  not call `initNav()`.
+
+## Icons
+
+Emoji are not used as interface icons anywhere. `assets/js/icons.js` holds 58
+inline SVG path sets vendored from [lucide-static](https://www.npmjs.com/package/lucide-static)
+(ISC), and `icon(name, { size, cls, stroke })` returns markup that inherits
+`currentColor`, so icons take the colour of the text around them. The file is
+generated from the Lucide bundle rather than hand-maintained: add a name to its
+`PATHS` map (copy the inner nodes of that icon's `<svg>` from the package) and it
+works everywhere `icon()` is called. Filled glyphs, like the rating stars, take
+`cls: 'icon-filled'`.
 
 ## Deploying
 
 Cloudflare Pages, framework preset **None**, build command empty, output
-directory the repo root. No environment variables are required — the publishable
-key is already in the client. Add the Pages project's domain to the Supabase
-Auth callback allow-list if you enable email links.
+directory the repo root. `functions/ai-chat.js` is picked up automatically.
+
+The site works without any configuration except the concierge, which needs one
+secret and takes one optional variable (Pages project → Settings → Functions →
+Environment variables — the secret is not stored in this repo and is not
+deployed with the static files):
+
+```
+GROQ_API_KEY   (secret)        gsk_…  from console.groq.com/keys
+GROQ_MODEL     (plain variable) openai/gpt-oss-120b
+```
+
+Without `GROQ_API_KEY` the endpoint answers `503 not_configured` and the panel
+says it is not connected yet; every other feature is unaffected. Add the Pages
+project's domain to the Supabase Auth callback allow-list if you enable email
+links.

@@ -1,20 +1,21 @@
 // Pedyo — Service category loading
 import { supabase } from './supabase-client.js';
 import { escapeHtml } from './ui.js';
+import { icon } from './icons.js';
 
 const CATEGORY_ICONS = {
-  'Solar, Inverters & Water': '☀️',
-  'Plumbing': '🔧',
-  'Electrical': '⚡',
-  'Transport & Delivery': '🚚',
-  'Construction & Repairs': '🏗️',
-  'Cleaning & Property Care': '🧹',
-  'Automotive': '🚗',
-  'Events': '🎉',
-  'Education & Tutoring': '📚',
-  'Digital & Business Services': '💻',
-  'Appliance Repair': '🔌',
-  'Property Care': '🏡'
+  'Solar, Inverters & Water': 'sun',
+  'Plumbing': 'wrench',
+  'Electrical': 'zap',
+  'Transport & Delivery': 'truck',
+  'Construction & Repairs': 'hard-hat',
+  'Cleaning & Property Care': 'spray-can',
+  'Automotive': 'car',
+  'Events': 'party-popper',
+  'Education & Tutoring': 'book-open',
+  'Digital & Business Services': 'laptop',
+  'Appliance Repair': 'plug',
+  'Property Care': 'house'
 };
 
 export async function loadCategories() {
@@ -63,7 +64,7 @@ const FALLBACK_CATEGORIES = [
 ];
 
 export function getCategoryIcon(name) {
-  return CATEGORY_ICONS[name] || '🔨';
+  return icon(CATEGORY_ICONS[name] || 'hammer', { size: 26 });
 }
 
 export function renderCategoryGrid(categories, container, linkPrefix = '/search.html?category=') {

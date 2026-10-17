@@ -1,6 +1,7 @@
 // Pedyo — Provider profile CRUD and rendering
 import { supabase } from './supabase-client.js';
 import { escapeHtml, formatDate, renderVerificationBadges, truncate, avatarInitials } from './ui.js';
+import { icon } from './icons.js';
 
 export async function getProviderBySlug(slug) {
   try {
@@ -234,7 +235,7 @@ export function serviceRowHtml(service = {}) {
              placeholder="e.g. Geyser replacement" value="${escapeHtml(service.service_name || '')}"/>
       <input class="form-input service-price" type="text" maxlength="120"
              placeholder="Price note (optional)" value="${escapeHtml(service.price_note || '')}"/>
-      <button type="button" class="btn btn-ghost btn-sm service-remove" aria-label="Remove service">✕</button>
+      <button type="button" class="btn btn-ghost btn-sm service-remove" aria-label="Remove service">${icon('x', { size: 14 })}</button>
     </div>`;
 }
 
@@ -301,7 +302,7 @@ export function renderProviderCard(provider) {
 
   const rating = Number(provider.rating_avg);
   const ratingHtml = provider.review_count > 0 && rating > 0
-    ? `<span class="provider-card-rating">★ ${rating.toFixed(1)}
+    ? `<span class="provider-card-rating">${icon('star', { size: 14, cls: 'icon-filled' })} ${rating.toFixed(1)}
          <span class="provider-card-rating-count">(${provider.review_count})</span></span>`
     : `<span class="provider-card-rating provider-card-rating-new">New</span>`;
 
@@ -312,13 +313,13 @@ export function renderProviderCard(provider) {
         <div style="flex:1;min-width:0">
           <div class="provider-card-name">${escapeHtml(name)}</div>
           <div class="provider-card-type">${type}</div>
-          ${verBadges.length ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${verBadges.map(b => `<span class="verify-badge">✓ ${escapeHtml(b)}</span>`).join('')}</div>` : ''}
+          ${verBadges.length ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${verBadges.map(b => `<span class="verify-badge">${icon('check', { size: 12, stroke: 3 })} ${escapeHtml(b)}</span>`).join('')}</div>` : ''}
         </div>
         ${ratingHtml}
       </div>
       ${provider.description ? `<p style="font-size:0.8125rem;color:var(--color-text-muted);line-height:1.5">${escapeHtml(truncate(provider.description, 100))}</p>` : ''}
       ${services.length ? `<div class="provider-card-services">${services.map(s => `<span class="badge badge-green">${escapeHtml(s)}</span>`).join('')}</div>` : ''}
-      ${areas.length ? `<div class="provider-card-areas">📍 ${areas.map(a => escapeHtml(a)).join(', ')}</div>` : ''}
+      ${areas.length ? `<div class="provider-card-areas">${icon('map-pin', { size: 13 })} ${areas.map(a => escapeHtml(a)).join(', ')}</div>` : ''}
     </a>
   `;
 }

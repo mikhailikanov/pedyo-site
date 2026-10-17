@@ -1,5 +1,8 @@
 // Pedyo — Authentication, session management, push notification prompt
 import { supabase } from './supabase-client.js';
+import { icon } from './icons.js';
+import { enableNotifications, showNotification } from './notify.js';
+import { clearIdentity } from './identity.js';
 
 export async function init() {
   try {
@@ -51,6 +54,7 @@ export async function signOut() {
     console.error('Sign out error:', e);
   } finally {
     localStorage.removeItem('pedyo_user');
+    clearIdentity();
     window.location.href = '/';
   }
 }
@@ -100,14 +104,18 @@ export async function promptPushNotifications() {
     box-shadow:0 8px 24px rgba(0,0,0,0.2);font-size:14px;max-width:480px;width:90%;
   `;
   banner.innerHTML = `
-    <span>🔔 Enable notifications to get new message alerts.</span>
+    ${icon('bell', { size: 18 })}
+    <span style="flex:1">Enable notifications to get new message alerts.</span>
     <button id="push-yes" style="background:#157A5A;color:#fff;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;font-weight:600;white-space:nowrap;">Enable</button>
-    <button id="push-no" style="background:transparent;color:#94A3B8;border:none;cursor:pointer;font-size:18px;line-height:1;">✕</button>
+    <button id="push-no" aria-label="Dismiss" style="background:transparent;color:#94A3B8;border:none;cursor:pointer;line-height:1;display:flex;">${icon('x', { size: 16 })}</button>
   `;
   document.body.appendChild(banner);
   document.getElementById('push-yes').onclick = async () => {
-    await Notification.requestPermission();
+    const perm = await enableNotifications();
     banner.remove();
+    if (perm === 'granted') {
+      showNotification('Pedyo', 'You will be alerted about new messages and listing updates.');
+    }
   };
   document.getElementById('push-no').onclick = () => banner.remove();
 }

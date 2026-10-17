@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Settings – Pedyo</title>
+<link href="/assets/images/logo/pedyo-mark.svg" rel="icon" type="image/svg+xml"/>
+<link href="/assets/css/reset.css" rel="stylesheet"/>
+<link href="/assets/css/tokens.css" rel="stylesheet"/>
+<link href="/assets/css/components.css" rel="stylesheet"/>
+<link href="/assets/css/layout.css" rel="stylesheet"/>
+<link href="/assets/css/pages.css" rel="stylesheet"/>
+</head>
+<body class="page-wrapper">
+<div id="nav-placeholder"></div>
+<main class="main-content">
+<div class="section-sm">
+<div class="container-sm">
+<h1 style="font-size:var(--font-size-2xl);font-weight:800;margin-bottom:32px">Settings</h1>
+<!-- Push notifications -->
+<div class="card" style="margin-bottom:24px">
+<h2 style="font-size:1.125rem;font-weight:700;margin-bottom:8px">Push Notifications</h2>
+<p style="font-size:0.875rem;color:var(--color-text-muted);margin-bottom:20px">Get notified when you receive new messages.</p>
+<div id="notif-status" style="margin-bottom:16px"></div>
+<button class="btn btn-primary" id="notif-btn">Enable Notifications</button>
+<p class="hidden" id="notif-blocked-msg" style="font-size:0.8rem;color:var(--color-text-muted);margin-top:12px;line-height:1.6">
+            Notifications are blocked in your browser. To re-enable them, click the lock icon in your browser's address bar, find "Notifications" and set it to "Allow", then reload this page.
+          </p>
+</div>
+<!-- Password change -->
+<div class="card" style="margin-bottom:24px">
+<h2 style="font-size:1.125rem;font-weight:700;margin-bottom:20px">Change Password</h2>
+<div id="pw-alert"></div>
+<form id="pw-form" style="display:flex;flex-direction:column;gap:16px">
+<div class="form-group">
+<label class="form-label" for="new-pw">New password</label>
+<input class="form-input" id="new-pw" minlength="8" placeholder="At least 8 characters" required="" type="password"/>
+</div>
+<div class="form-group">
+<label class="form-label" for="confirm-pw">Confirm new password</label>
+<input class="form-input" id="confirm-pw" placeholder="Repeat new password" required="" type="password"/>
+</div>
+<button class="btn btn-primary" id="pw-btn" type="submit">Update Password</button>
+</form>
+</div>
+<!-- Email -->
+<div class="card">
+<h2 style="font-size:1.125rem;font-weight:700;margin-bottom:8px">Account Email</h2>
+<p style="font-size:0.875rem;color:var(--color-text-muted);margin-bottom:4px">Signed in as:</p>
+<p id="account-email" style="font-weight:600;font-size:0.9rem"></p>
+</div>
+</div>
+</div>
+</main>
+<div id="footer-placeholder"></div>
+<script type="module">
+    import { renderNav, renderFooter } from '/assets/js/nav-html.js';
+    import { initNav } from '/assets/js/nav.js';
+    import { supabase } from '/assets/js/supabase-client.js';
+    import { updatePassword, requireAuth } from '/assets/js/auth.js';
+    import { showAlert, setLoading } from '/assets/js/ui.js';
+
+    document.getElementById('nav-placeholder').innerHTML = renderNav('');
+    document.getElementById('footer-placeholder').innerHTML = renderFooter();
+    initNav();
+    if (!await requireAuth('/settings.html')) throw new Error();
+
+    const { data: { user } } = await supabase.auth.getUser();
+    document.getElementById('account-email').textContent = user?.email || '';
+
+    // Notification status
+    const notifBtn = document.getElementById('notif-btn');
+    const notifStatus = document.getElementById('notif-status');
+    const notifBlocked = document.getElementById('notif-blocked-msg');
+
+    function updateNotifUI() {
+      if (!('Notification' in window)) {
+        notifStatus.innerHTML = '<span class="badge badge-gray">Not supported in this browser</span>';
+        notifBtn.disabled = true;
+        return;
+      }
+      const perm = Notification.permission;
+      if (perm === 'granted') {
+        notifStatus.innerHTML = '<span class="badge badge-green">✓ Notifications enabled</span>';
+        notifBtn.textContent = 'Disable Notifications';
+      } else if (perm === 'denied') {
+        notifStatus.innerHTML = '<span class="badge badge-red">Notifications blocked</span>';
+        notifBtn.disabled = true;
+        notifBlocked.classList.remove('hidden');
+      } else {
+        notifStatus.innerHTML = '<span class="badge badge-gray">Notifications not enabled</span>';
+        notifBtn.textContent = 'Enable Notifications';
+      }
+    }
+    updateNotifUI();
+
+    notifBtn.addEventListener('click', async () => {
+      if (Notification.permission === 'granted') {
+        localStorage.removeItem('pedyo_push_prompted');
+        notifStatus.innerHTML = '<span class="badge badge-gray">Notifications disabled</span>';
+        notifBtn.textContent = 'Enable Notifications';
+        return;
+      }
+      const result = await Notification.requestPermission();
+      updateNotifUI();
+    });
+
+    // Password change
+    document.getElementById('pw-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const btn = document.getElementById('pw-btn');
+      const alertEl = document.getElementById('pw-alert');
+      const pw  = document.getElementById('new-pw').value;
+      const cpw = document.getElementById('confirm-pw').value;
+      if (pw !== cpw) { showAlert(alertEl, 'Passwords do not match.'); return; }
+      setLoading(btn, true, 'Updating…');
+      try {
+        await updatePassword(pw);
+        showAlert(alertEl, 'Password updated successfully!', 'success');
+        e.target.reset();
+      } catch (err) {
+        showAlert(alertEl, err.message || 'Failed to update password.');
+      } finally {
+        setLoading(btn, false, 'Update Password');
+      }
+    });
+  </script>
+</body>
+</html>

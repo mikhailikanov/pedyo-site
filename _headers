@@ -1,0 +1,30 @@
+# Pedyo — Cloudflare Pages headers
+# A rule later in the file wins for a header it also sets, so the
+# catch-all below carries the security headers to every response.
+
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), microphone=(), camera=(), interest-cohort=()
+  Cross-Origin-Opener-Policy: same-origin
+  Cache-Control: no-cache
+
+# Pages must revalidate so a deploy is visible immediately.
+/*.html
+  Cache-Control: no-cache, no-store, must-revalidate
+
+# No build step hashes these filenames, so keep the window short —
+# a long max-age would pin stale JS to a deploy for days.
+/assets/css/*
+  Cache-Control: public, max-age=300, stale-while-revalidate=3600
+/assets/js/*
+  Cache-Control: public, max-age=300, stale-while-revalidate=3600
+
+/assets/images/*
+  Cache-Control: public, max-age=86400
+
+/robots.txt
+  Cache-Control: public, max-age=3600
+/sitemap.xml
+  Cache-Control: public, max-age=3600

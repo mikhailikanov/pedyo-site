@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Privacy Policy – Pedyo</title>
+<link href="/assets/images/logo/pedyo-mark.svg" rel="icon" type="image/svg+xml"/>
+<link href="/assets/css/reset.css" rel="stylesheet"/>
+<link href="/assets/css/tokens.css" rel="stylesheet"/>
+<link href="/assets/css/components.css" rel="stylesheet"/>
+<link href="/assets/css/layout.css" rel="stylesheet"/>
+<link href="/assets/css/pages.css" rel="stylesheet"/>
+</head>
+<body class="page-wrapper">
+<div id="nav-placeholder"></div>
+<main class="main-content">
+<div class="page-hero"><h1>Privacy Policy</h1><p>Last updated: August 2026</p></div>
+<section class="section">
+<div class="container-md" style="line-height:1.8;color:var(--color-text)">
+<div style="background:var(--color-bg);border-radius:12px;padding:20px;margin-bottom:32px;font-size:0.875rem;color:var(--color-text-muted)">
+          This Privacy Policy explains how Pedyo collects, uses and protects your personal information. Pedyo is committed to data privacy and operates in accordance with Zimbabwean law.
+        </div>
+<h2 style="font-size:1.25rem;font-weight:700;margin:32px 0 12px">1. Information We Collect</h2>
+<p>We collect information you provide directly, including your name, email address, phone number and any content you submit to the platform. We also collect usage data such as pages visited and search queries.</p>
+<h2 style="font-size:1.25rem;font-weight:700;margin:32px 0 12px">2. How We Use Your Information</h2>
+<p>We use your information to operate the Pedyo platform, facilitate communication between customers and providers, process verification requests, and improve our services. We do not sell your personal information to third parties.</p>
+<h2 style="font-size:1.25rem;font-weight:700;margin:32px 0 12px">3. Verification Documents</h2>
+<p>Verification documents are stored in a private storage bucket and are never publicly accessible. Administrators access them only via signed URLs with a 60-second expiry. Documents are used solely for the purpose of verifying provider identity or business registration.</p>
+<h2 style="font-size:1.25rem;font-weight:700;margin:32px 0 12px">4. Data Security</h2>
+<p>All data is transmitted over HTTPS. Passwords are handled exclusively by Supabase Auth using bcrypt hashing and are never stored in plain text. Row Level Security is enabled on every database table, ensuring users can only access their own private data.</p>
+<h2 style="font-size:1.25rem;font-weight:700;margin:32px 0 12px">5. Cookies and Local Storage</h2>
+<p>Pedyo uses browser local storage to maintain your session state and notification preferences. We do not use third-party tracking cookies.</p>
+<h2 style="font-size:1.25rem;font-weight:700;margin:32px 0 12px">6. Your Rights</h2>
+<p>You have the right to access, correct or delete your personal information. You may request account deletion at any time from your account settings. We will process deletion requests within 30 days.</p>
+<h2 style="font-size:1.25rem;font-weight:700;margin:32px 0 12px">7. Data Retention</h2>
+<p>We retain your data for as long as your account is active or as needed to provide services. Upon account deletion, your personal data is removed from our systems within 30 days, except where retention is required by law.</p>
+<h2 style="font-size:1.25rem;font-weight:700;margin:32px 0 12px">8. Third-Party Services</h2>
+<p>Pedyo uses Supabase for database, authentication and file storage, and Cloudflare Pages for hosting. These services have their own privacy policies. We do not share your data with any other third parties.</p>
+<h2 style="font-size:1.25rem;font-weight:700;margin:32px 0 12px">9. Contact</h2>
+<p>For privacy-related enquiries, please <a href="/contact.html" style="color:var(--green)">contact us</a>.</p>
+<div style="margin-top:48px;padding-top:24px;border-top:1px solid var(--color-border);font-size:0.875rem;color:var(--color-text-muted)">
+<p>This policy is governed by the laws of Zimbabwe.</p>
+</div>
+</div>
+</section>
+</main>
+<div id="footer-placeholder"></div>
+<script type="module">
+    import { renderNav, renderFooter } from '/assets/js/nav-html.js';
+    import { initNav } from '/assets/js/nav.js';
+    document.getElementById('nav-placeholder').innerHTML = renderNav('');
+    document.getElementById('footer-placeholder').innerHTML = renderFooter();
+    initNav();
+  </script>
+</body>
+</html>

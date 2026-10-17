@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Image Moderation – Pedyo Admin</title>
+<link href="/assets/images/logo/pedyo-mark.svg" rel="icon" type="image/svg+xml"/>
+<link href="/assets/css/reset.css" rel="stylesheet"/>
+<link href="/assets/css/tokens.css" rel="stylesheet"/>
+<link href="/assets/css/components.css" rel="stylesheet"/>
+<link href="/assets/css/layout.css" rel="stylesheet"/>
+<link href="/assets/css/pages.css" rel="stylesheet"/>
+</head>
+<body class="page-wrapper">
+<div id="nav-placeholder"></div>
+<div class="dashboard-layout">
+<nav class="sidebar" id="admin-sidebar"></nav>
+<main class="dashboard-main">
+<div class="dashboard-header">
+<h1>Image Moderation</h1>
+<p>Review and approve or reject provider-uploaded images before they appear publicly</p>
+</div>
+<div id="images-alert"></div>
+<div id="images-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px">
+<div style="text-align:center;padding:40px;grid-column:1/-1"><div class="spinner" style="margin:0 auto"></div></div>
+</div>
+</main>
+</div>
+<script type="module">
+    import { renderNav } from '/assets/js/nav-html.js';
+    import { initNav } from '/assets/js/nav.js';
+    import { requireAdmin, getPendingImages, approveImage, rejectImage } from '/assets/js/admin.js';
+    import { renderAdminSidebar } from '/assets/js/shared-nav.js';
+    import { escapeHtml, showAlert } from '/assets/js/ui.js';
+
+    document.getElementById('nav-placeholder').innerHTML = renderNav('');
+    initNav();
+    const adminUser = await requireAdmin();
+    if (!adminUser) throw new Error();
+    document.getElementById('admin-sidebar').innerHTML = renderAdminSidebar('images');
+
+    async function loadImages() {
+      const images = await getPendingImages();
+      const grid = document.getElementById('images-grid');
+      if (!images.length) {
+        grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><p>No images pending moderation.</p></div>';
+        return;
+      }
+      grid.innerHTML = images.map(img => `
+        <div class="card" id="img-card-${img.id}" style="padding:0;overflow:hidden">
+          <img src="${escapeHtml(img.public_url)}" alt="Provider image"
+               style="width:100%;aspect-ratio:1;object-fit:cover;display:block">
+          <div style="padding:12px">
+            <p style="font-size:0.75rem;color:var(--color-text-muted);margin-bottom:10px">
+              ${escapeHtml(img.provider_profiles?.business_name || 'Unknown provider')}
+            </p>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-primary btn-sm approve-img-btn" data-id="${img.id}" style="flex:1">Approve</button>
+              <button class="btn btn-danger btn-sm reject-img-btn" data-id="${img.id}" style="flex:1">Reject</button>
+            </div>
+          </div>
+        </div>`).join('');
+
+      grid.querySelectorAll('.approve-img-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          try {
+            await approveImage(btn.dataset.id, adminUser.id);
+            document.getElementById(`img-card-${btn.dataset.id}`)?.remove();
+            showAlert(document.getElementById('images-alert'), 'Image approved.', 'success');
+          } catch (err) { showAlert(document.getElementById('images-alert'), err.message || 'Failed.'); }
+        });
+      });
+
+      grid.querySelectorAll('.reject-img-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          try {
+            await rejectImage(btn.dataset.id, adminUser.id);
+            document.getElementById(`img-card-${btn.dataset.id}`)?.remove();
+            showAlert(document.getElementById('images-alert'), 'Image rejected.', 'success');
+          } catch (err) { showAlert(document.getElementById('images-alert'), err.message || 'Failed.'); }
+        });
+      });
+    }
+
+    loadImages();
+  </script>
+</body>
+</html>

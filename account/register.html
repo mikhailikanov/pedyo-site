@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Create Account – Pedyo</title>
+<link href="/assets/images/logo/pedyo-mark.svg" rel="icon" type="image/svg+xml"/>
+<link href="/assets/css/reset.css" rel="stylesheet"/>
+<link href="/assets/css/tokens.css" rel="stylesheet"/>
+<link href="/assets/css/components.css" rel="stylesheet"/>
+<link href="/assets/css/layout.css" rel="stylesheet"/>
+<link href="/assets/css/pages.css" rel="stylesheet"/>
+</head>
+<body>
+<div class="auth-page">
+<div class="auth-card">
+<div class="auth-logo">
+<a href="/" class="logo"><img alt="" class="logo-mark" src="/assets/images/logo/pedyo-mark.svg"/><span class="logo-word">Pedyo</span></a>
+</div>
+<h1 class="auth-title">Create your account</h1>
+<p class="auth-subtitle">Free for customers and providers</p>
+<div id="auth-alert"></div>
+<form class="auth-form" id="register-form">
+<div class="form-group">
+<label class="form-label" for="full-name">Full name</label>
+<input autocomplete="name" class="form-input" id="full-name" placeholder="Your full name" required="" type="text"/>
+</div>
+<div class="form-group">
+<label class="form-label" for="email">Email address</label>
+<input autocomplete="email" class="form-input" id="email" placeholder="you@example.com" required="" type="email"/>
+</div>
+<div class="form-group">
+<label class="form-label" for="password">Password</label>
+<input autocomplete="new-password" class="form-input" id="password" minlength="8" placeholder="At least 8 characters" required="" type="password"/>
+<span class="form-hint">Minimum 8 characters</span>
+</div>
+<div class="form-group">
+<label class="form-label" for="confirm-password">Confirm password</label>
+<input autocomplete="new-password" class="form-input" id="confirm-password" placeholder="Repeat your password" required="" type="password"/>
+</div>
+<div style="display:flex;align-items:flex-start;gap:10px;font-size:0.8rem;color:var(--color-text-muted)">
+<input id="agree-terms" required="" style="margin-top:2px;flex-shrink:0" type="checkbox"/>
+<label for="agree-terms">I agree to the <a href="/legal/terms.html" style="color:var(--green)">Terms of Use</a> and <a href="/legal/privacy.html" style="color:var(--green)">Privacy Policy</a></label>
+</div>
+<button class="btn btn-primary w-full" id="register-btn" type="submit">Create Account</button>
+</form>
+<p class="auth-footer">Already have an account? <a href="/account/login.html">Sign in</a></p>
+</div>
+</div>
+<script type="module">
+    import { signUp } from '/assets/js/auth.js';
+    import { showAlert, setLoading } from '/assets/js/ui.js';
+
+    document.getElementById('register-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const btn = document.getElementById('register-btn');
+      const alertEl = document.getElementById('auth-alert');
+      const password = document.getElementById('password').value;
+      const confirm  = document.getElementById('confirm-password').value;
+      if (password !== confirm) { showAlert(alertEl, 'Passwords do not match.'); return; }
+      setLoading(btn, true, 'Creating account…');
+      try {
+        const { session } = await signUp(
+          document.getElementById('email').value.trim(),
+          password,
+          document.getElementById('full-name').value.trim()
+        );
+        // The profiles row is created by a database trigger at signup,
+        // so there is nothing else to write from here.
+        if (session) {
+          // Confirmation switched off: GoTrue returns a session straight
+          // away, so the confirm screen would point at an email nobody sent.
+          showAlert(alertEl, 'Account created! Taking you in…', 'success');
+          setTimeout(() => window.location.href = '/', 900);
+        } else {
+          showAlert(alertEl, 'Account created! Please check your email to confirm your address.', 'success');
+          setTimeout(() => window.location.href = '/account/confirm-email.html', 2000);
+        }
+      } catch (err) {
+        showAlert(alertEl, err.message || 'Registration failed. Please try again.');
+        setLoading(btn, false, 'Create Account');
+      }
+    });
+  </script>
+</body>
+</html>

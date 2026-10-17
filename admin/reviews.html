@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Review Moderation – Pedyo Admin</title>
+<link href="/assets/images/logo/pedyo-mark.svg" rel="icon" type="image/svg+xml"/>
+<link href="/assets/css/reset.css" rel="stylesheet"/>
+<link href="/assets/css/tokens.css" rel="stylesheet"/>
+<link href="/assets/css/components.css" rel="stylesheet"/>
+<link href="/assets/css/layout.css" rel="stylesheet"/>
+<link href="/assets/css/pages.css" rel="stylesheet"/>
+</head>
+<body class="page-wrapper">
+<div id="nav-placeholder"></div>
+<div class="dashboard-layout">
+<nav class="sidebar" id="admin-sidebar"></nav>
+<main class="dashboard-main">
+<div class="dashboard-header">
+<h1>Review Moderation</h1>
+<p>Hide or unhide customer reviews</p>
+</div>
+<div id="reviews-alert"></div>
+<div id="reviews-list">
+<div style="text-align:center;padding:40px"><div class="spinner" style="margin:0 auto"></div></div>
+</div>
+<div id="pagination" style="margin-top:24px;display:flex;justify-content:center;gap:8px"></div>
+</main>
+</div>
+<script type="module">
+    import { renderNav } from '/assets/js/nav-html.js';
+    import { initNav } from '/assets/js/nav.js';
+    import { requireAdmin, getAllReviews, toggleReviewVisibility } from '/assets/js/admin.js';
+    import { renderAdminSidebar } from '/assets/js/shared-nav.js';
+    import { escapeHtml, formatDate, renderStars, showAlert } from '/assets/js/ui.js';
+
+    document.getElementById('nav-placeholder').innerHTML = renderNav('');
+    initNav();
+    const adminUser = await requireAdmin();
+    if (!adminUser) throw new Error();
+    document.getElementById('admin-sidebar').innerHTML = renderAdminSidebar('reviews');
+
+    let currentPage = 1;
+    const LIMIT = 20;
+
+    async function loadReviews(page = 1) {
+      currentPage = page;
+      const { reviews, total } = await getAllReviews({ page, limit: LIMIT });
+      const listEl = document.getElementById('reviews-list');
+
+      if (!reviews.length) {
+        listEl.innerHTML = '<div class="empty-state"><p>No reviews found.</p></div>';
+        return;
+      }
+
+      listEl.innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Reviewer</th>
+                <th>Provider</th>
+                <th>Rating</th>
+                <th>Review</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${reviews.map(r => `
+                <tr id="review-row-${r.id}">
+                  <td style="font-size:0.875rem">${escapeHtml(r.profiles?.full_name || 'Anonymous')}</td>
+                  <td style="font-size:0.875rem">${escapeHtml(r.provider_profiles?.business_name || 'N/A')}</td>
+                  <td>${renderStars(r.rating)}</td>
+                  <td style="max-width:250px;font-size:0.8rem">${escapeHtml(r.content || '—')}</td>
+                  <td style="font-size:0.75rem;color:var(--color-text-muted)">${formatDate(r.created_at)}</td>
+                  <td>${r.hidden ? '<span class="badge badge-red">Hidden</span>' : '<span class="badge badge-green">Visible</span>'}</td>
+                  <td>
+                    <button class="btn btn-sm ${r.hidden ? 'btn-primary' : 'btn-danger'} toggle-review-btn"
+                            data-id="${r.id}" data-hidden="${r.hidden}">
+                      ${r.hidden ? 'Unhide' : 'Hide'}
+                    </button>
+                  </td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`;
+
+      listEl.querySelectorAll('.toggle-review-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const hidden = btn.dataset.hidden === 'true';
+          try {
+            await toggleReviewVisibility(btn.dataset.id, !hidden, adminUser.id);
+            showAlert(document.getElementById('reviews-alert'), `Review ${!hidden ? 'hidden' : 'unhidden'}.`, 'success');
+            loadReviews(currentPage);
+          } catch (err) {
+            showAlert(document.getElementById('reviews-alert'), err.message || 'Failed.');
+          }
+        });
+      });
+
+      // Pagination
+      const pages = Math.ceil(total / LIMIT);
+      const pagEl = document.getElementById('pagination');
+      pagEl.innerHTML = pages > 1 ? Array.from({ length: pages }, (_, i) => i + 1)
+        .map(p => `<button class="page-btn ${p === page ? 'active' : ''}" data-page="${p}">${p}</button>`)
+        .join('') : '';
+      pagEl.querySelectorAll('.page-btn').forEach(b => b.addEventListener('click', () => loadReviews(+b.dataset.page)));
+    }
+
+    loadReviews();
+  </script>
+</body>
+</html>

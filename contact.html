@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Contact – Pedyo</title>
+<link href="/assets/images/logo/pedyo-mark.svg" rel="icon" type="image/svg+xml"/>
+<link href="/assets/css/reset.css" rel="stylesheet"/>
+<link href="/assets/css/tokens.css" rel="stylesheet"/>
+<link href="/assets/css/components.css" rel="stylesheet"/>
+<link href="/assets/css/layout.css" rel="stylesheet"/>
+<link href="/assets/css/pages.css" rel="stylesheet"/>
+</head>
+<body class="page-wrapper">
+<div id="nav-placeholder"></div>
+<main class="main-content">
+<div class="page-hero">
+<h1>Contact Us</h1>
+<p>Have a question or need help? We'd love to hear from you.</p>
+</div>
+<section class="section">
+<div class="container-sm">
+<div class="card" style="margin-bottom:32px">
+<h2 style="font-size:1.25rem;font-weight:700;margin-bottom:24px">Send us a message</h2>
+<form id="contact-form" style="display:flex;flex-direction:column;gap:20px">
+<div class="form-group">
+<label class="form-label" for="contact-name">Your name</label>
+<input class="form-input" id="contact-name" placeholder="Full name" required="" type="text"/>
+</div>
+<div class="form-group">
+<label class="form-label" for="contact-email">Email address</label>
+<input class="form-input" id="contact-email" placeholder="you@example.com" required="" type="email"/>
+</div>
+<div class="form-group">
+<label class="form-label" for="contact-subject">Subject</label>
+<select class="form-select" id="contact-subject">
+<option value="general">General enquiry</option>
+<option value="provider">Provider support</option>
+<option value="report">Report an issue</option>
+<option value="other">Other</option>
+</select>
+</div>
+<div class="form-group">
+<label class="form-label" for="contact-message">Message</label>
+<textarea class="form-textarea" id="contact-message" placeholder="How can we help?" required="" rows="5"></textarea>
+</div>
+<div id="contact-alert"></div>
+<button class="btn btn-primary" id="contact-submit" type="submit">Send Message</button>
+</form>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+<div class="card" style="text-align:center">
+<div style="font-size:2rem;margin-bottom:12px">📍</div>
+<h3 style="font-weight:700;margin-bottom:8px">Location</h3>
+<p style="font-size:0.875rem;color:var(--color-text-muted)">Harare &amp; Chitungwiza, Zimbabwe</p>
+</div>
+<div class="card" style="text-align:center">
+<div style="font-size:2rem;margin-bottom:12px">🌐</div>
+<h3 style="font-weight:700;margin-bottom:8px">Website</h3>
+<a href="https://pedyo.pages.dev" style="font-size:0.875rem;color:var(--green)">pedyo.pages.dev</a>
+</div>
+</div>
+</div>
+</section>
+</main>
+<div id="footer-placeholder"></div>
+<script type="module">
+    import { renderNav, renderFooter } from '/assets/js/nav-html.js';
+    import { initNav } from '/assets/js/nav.js';
+    import { supabase } from '/assets/js/supabase-client.js';
+    import { showAlert, setLoading } from '/assets/js/ui.js';
+
+    document.getElementById('nav-placeholder').innerHTML = renderNav('contact');
+    document.getElementById('footer-placeholder').innerHTML = renderFooter();
+    initNav();
+
+    document.getElementById('contact-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const btn = document.getElementById('contact-submit');
+      const alertEl = document.getElementById('contact-alert');
+      setLoading(btn, true, 'Sending…');
+      try {
+        // Store contact message in Supabase (reports table as general contact)
+        const { error } = await supabase.from('reports').insert({
+          target_type: 'contact',
+          reason: `[${document.getElementById('contact-subject').value}] ${document.getElementById('contact-message').value}`,
+          reporter_name: document.getElementById('contact-name').value,
+          reporter_email: document.getElementById('contact-email').value
+        });
+        if (error) throw error;
+        showAlert(alertEl, 'Message sent! We\'ll get back to you soon.', 'success');
+        e.target.reset();
+      } catch (err) {
+        showAlert(alertEl, 'Failed to send message. Please try again.');
+      } finally {
+        setLoading(btn, false, 'Send Message');
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Events – Pedyo</title>
+  <link rel="icon" href="/assets/images/logo/pedyo-mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/css/reset.css">
+  <link rel="stylesheet" href="/assets/css/tokens.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+  <link rel="stylesheet" href="/assets/css/layout.css">
+  <link rel="stylesheet" href="/assets/css/pages.css">
+</head>
+<body class="page-wrapper">
+  <div id="nav-placeholder"></div>
+  <main class="main-content">
+    <div class="page-hero">
+      <div style="font-size:3rem;margin-bottom:12px">🎉</div>
+      <h1>Events</h1>
+      <p>Find trusted Events providers near you in Harare and Chitungwiza</p>
+    </div>
+    <section class="section">
+      <div class="container">
+        <div id="providers-grid" class="grid-auto">
+          <div style="text-align:center;padding:40px;grid-column:1/-1"><div class="spinner" style="margin:0 auto"></div></div>
+        </div>
+        <div id="empty-state" class="empty-state hidden">
+          <p>No providers available yet in this category.</p>
+          <a href="/account/become-provider.html" class="btn btn-primary" style="margin-top:16px">Be the first provider</a>
+        </div>
+      </div>
+    </section>
+  </main>
+  <div id="footer-placeholder"></div>
+  <script type="module">
+    import { renderNav, renderFooter } from '/assets/js/nav-html.js';
+    import { initNav } from '/assets/js/nav.js';
+    import { searchProviders, renderProviderCard } from '/assets/js/providers.js';
+    document.getElementById('nav-placeholder').innerHTML = renderNav('services');
+    document.getElementById('footer-placeholder').innerHTML = renderFooter();
+    initNav();
+    const { providers } = await searchProviders({ category: 'Events', limit: 24 });
+    const grid = document.getElementById('providers-grid');
+    if (providers.length) {
+      grid.innerHTML = providers.map(p => renderProviderCard(p)).join('');
+    } else {
+      grid.innerHTML = '';
+      document.getElementById('empty-state').classList.remove('hidden');
+    }
+  </script>
+</body>
+</html>

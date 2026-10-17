@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Verification – Pedyo</title>
+<link href="/assets/images/logo/pedyo-mark.svg" rel="icon" type="image/svg+xml"/>
+<link href="/assets/css/reset.css" rel="stylesheet"/>
+<link href="/assets/css/tokens.css" rel="stylesheet"/>
+<link href="/assets/css/components.css" rel="stylesheet"/>
+<link href="/assets/css/layout.css" rel="stylesheet"/>
+<link href="/assets/css/pages.css" rel="stylesheet"/>
+</head>
+<body class="page-wrapper">
+<div id="nav-placeholder"></div>
+<main class="main-content">
+<div class="page-hero">
+<h1>Get Verified</h1>
+<p>Submit documents to earn honest verification badges on your provider profile.</p>
+</div>
+<section class="section">
+<div class="container-sm">
+<!-- What verification means -->
+<div class="card" style="margin-bottom:32px">
+<h2 style="font-size:1.125rem;font-weight:700;margin-bottom:16px">What verification means</h2>
+<p style="font-size:0.875rem;color:var(--color-text-muted);line-height:1.7;margin-bottom:16px">
+            Pedyo uses precise, honest verification labels. A badge means only what it states — nothing more.
+            We never claim a provider is "fully trusted" or "background checked" unless those specific checks have been performed.
+          </p>
+<div style="display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;align-items:center;gap:12px;padding:10px;background:var(--color-bg);border-radius:8px">
+<span class="verify-badge">✓ Contact confirmed</span>
+<span style="font-size:0.8rem;color:var(--color-text-muted)">Your contact details have been verified by Pedyo</span>
+</div>
+<div style="display:flex;align-items:center;gap:12px;padding:10px;background:var(--color-bg);border-radius:8px">
+<span class="verify-badge">✓ Identity reviewed</span>
+<span style="font-size:0.8rem;color:var(--color-text-muted)">Your government-issued ID has been reviewed</span>
+</div>
+<div style="display:flex;align-items:center;gap:12px;padding:10px;background:var(--color-bg);border-radius:8px">
+<span class="verify-badge">✓ Business docs reviewed</span>
+<span style="font-size:0.8rem;color:var(--color-text-muted)">Your business registration documents have been reviewed</span>
+</div>
+</div>
+</div>
+<!-- Submission form -->
+<div class="card" id="verification-card">
+<h2 style="font-size:1.125rem;font-weight:700;margin-bottom:8px">Submit Verification Documents</h2>
+<p style="font-size:0.875rem;color:var(--color-text-muted);margin-bottom:24px">
+            Documents are stored privately and only accessible to Pedyo administrators via secure signed URLs.
+            They are never publicly accessible.
+          </p>
+<div id="verif-alert"></div>
+<div id="verif-content">
+<div style="text-align:center;padding:32px"><div class="spinner" style="margin:0 auto"></div></div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<div id="footer-placeholder"></div>
+<script type="module">
+    import { renderNav, renderFooter } from '/assets/js/nav-html.js';
+    import { initNav } from '/assets/js/nav.js';
+    import { supabase } from '/assets/js/supabase-client.js';
+    import { getMyProviderProfiles } from '/assets/js/providers.js';
+    import { uploadVerificationDoc } from '/assets/js/storage.js';
+    import { showAlert, setLoading, escapeHtml } from '/assets/js/ui.js';
+    import { requireAuth } from '/assets/js/auth.js';
+
+    document.getElementById('nav-placeholder').innerHTML = renderNav('');
+    document.getElementById('footer-placeholder').innerHTML = renderFooter();
+    initNav();
+    if (!await requireAuth('/verification.html')) throw new Error();
+
+    const { data: { user } } = await supabase.auth.getUser();
+    const profiles = await getMyProviderProfiles(user.id);
+    const contentEl = document.getElementById('verif-content');
+
+    if (!profiles.length) {
+      contentEl.innerHTML = `
+        <div class="empty-state" style="padding:32px">
+          <p>You need a provider profile before submitting verification documents.</p>
+          <a href="/account/become-provider.html" class="btn btn-primary" style="margin-top:16px">Create Provider Profile</a>
+        </div>`;
+    } else {
+      contentEl.innerHTML = `
+        <form id="verif-form" style="display:flex;flex-direction:column;gap:20px">
+          <div class="form-group">
+            <label class="form-label" for="verif-profile">Provider profile</label>
+            <select class="form-select" id="verif-profile">
+              ${profiles.map(p => `<option value="${p.id}">${escapeHtml(p.business_name)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="verif-type">Document type</label>
+            <select class="form-select" id="verif-type">
+              <option value="national_id">National ID</option>
+              <option value="passport">Passport</option>
+              <option value="business_registration">Business Registration Certificate</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="verif-file">Document file</label>
+            <input type="file" class="form-input" id="verif-file" accept="image/*,.pdf" required>
+            <span class="form-hint">JPEG, PNG, WebP or PDF. Max 10MB. Stored privately.</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="verif-notes">Additional notes (optional)</label>
+            <textarea class="form-textarea" id="verif-notes" rows="2" placeholder="Any additional context for the reviewer…"></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary" id="verif-submit-btn">Submit Documents</button>
+        </form>`;
+
+      document.getElementById('verif-form').addEventListener('submit', async e => {
+        e.preventDefault();
+        const btn = document.getElementById('verif-submit-btn');
+        const alertEl = document.getElementById('verif-alert');
+        const file = document.getElementById('verif-file').files[0];
+        if (!file) { showAlert(alertEl, 'Please select a file.'); return; }
+        setLoading(btn, true, 'Uploading…');
+        try {
+          const storagePath = await uploadVerificationDoc(user.id, file);
+          await supabase.from('verification_requests').insert({
+            user_id: user.id,
+            provider_profile_id: document.getElementById('verif-profile').value,
+            document_type: document.getElementById('verif-type').value,
+            storage_path: storagePath,
+            notes: document.getElementById('verif-notes').value.trim(),
+            status: 'pending'
+          });
+          showAlert(alertEl, 'Documents submitted successfully! An administrator will review them shortly.', 'success');
+          e.target.reset();
+        } catch (err) {
+          showAlert(alertEl, err.message || 'Failed to submit documents.');
+        } finally {
+          setLoading(btn, false, 'Submit Documents');
+        }
+      });
+    }
+  </script>
+</body>
+</html>

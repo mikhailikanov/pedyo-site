@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Messages – Pedyo</title>
+<link href="/assets/images/logo/pedyo-mark.svg" rel="icon" type="image/svg+xml"/>
+<link href="/assets/css/reset.css" rel="stylesheet"/>
+<link href="/assets/css/tokens.css" rel="stylesheet"/>
+<link href="/assets/css/components.css" rel="stylesheet"/>
+<link href="/assets/css/layout.css" rel="stylesheet"/>
+<link href="/assets/css/pages.css" rel="stylesheet"/>
+</head>
+<body class="page-wrapper" style="overflow:hidden">
+<div id="nav-placeholder"></div>
+<div class="messages-layout">
+<!-- Conversations list -->
+<div class="conversations-list">
+<div class="conversations-header">
+<h2>Messages</h2>
+<p style="font-size:0.75rem;color:var(--color-text-muted);margin-top:4px">Your conversations as a customer</p>
+</div>
+<div id="conv-list">
+<div style="padding:24px;text-align:center"><div class="spinner" style="margin:0 auto"></div></div>
+</div>
+</div>
+<!-- Chat area -->
+<div class="chat-area" id="chat-area">
+<div class="empty-state" style="margin:auto">
+<svg fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+<h3>Select a conversation</h3>
+<p>Choose a conversation from the list to start messaging.</p>
+</div>
+</div>
+</div>
+<script type="module">
+    import { renderNav } from '/assets/js/nav-html.js';
+    import { initNav } from '/assets/js/nav.js';
+    import { supabase } from '/assets/js/supabase-client.js';
+    import { getPersonalConversations, getMessages, sendMessage, markThreadRead, subscribeToConversation, renderConversationItem, renderMessage } from '/assets/js/conversations.js';
+    import { escapeHtml, avatarInitials, formatTime } from '/assets/js/ui.js';
+    import { requireAuth } from '/assets/js/auth.js';
+
+    document.getElementById('nav-placeholder').innerHTML = renderNav('');
+    initNav();
+
+    if (!await requireAuth('/messages.html')) throw new Error();
+
+    const { data: { user } } = await supabase.auth.getUser();
+    let activeConvId = null;
+    let realtimeSub = null;
+    let conversations = [];
+
+    async function loadConversations() {
+      conversations = await getPersonalConversations(user.id);
+      const listEl = document.getElementById('conv-list');
+      if (!conversations.length) {
+        listEl.innerHTML = '<div class="empty-state" style="padding:32px"><p>No conversations yet.</p></div>';
+        return;
+      }
+      listEl.innerHTML = conversations
+        .map(c => renderConversationItem(c, user.id, c.id === activeConvId))
+        .join('');
+
+      listEl.querySelectorAll('.conversation-item').forEach(item => {
+        item.addEventListener('click', () => openConversation(item.dataset.convId));
+      });
+    }
+
+    async function openConversation(convId) {
+      const conv = conversations.find(c => c.id === convId);
+      if (!conv) return;
+      activeConvId = convId;
+      const name = conv.other_party_name || 'Pedyo user';
+
+      // Mark active
+      document.querySelectorAll('.conversation-item').forEach(i =>
+        i.classList.toggle('active', i.dataset.convId === convId));
+
+      // Unsubscribe previous
+      if (realtimeSub) { supabase.removeChannel(realtimeSub); realtimeSub = null; }
+
+      const chatArea = document.getElementById('chat-area');
+      chatArea.innerHTML = `
+        <div class="chat-header">
+          <div class="avatar">${avatarInitials(name)}</div>
+          <div>
+            <div style="font-weight:700">${escapeHtml(name)}</div>
+          </div>
+        </div>
+        <div class="chat-messages" id="chat-messages"></div>
+        <div class="chat-input-area">
+          <textarea class="chat-input" id="chat-input" placeholder="Type a message…" rows="1"></textarea>
+          <button class="btn btn-primary" id="send-btn">Send</button>
+        </div>`;
+
+      const msgs = await getMessages(convId);
+      const msgsEl = document.getElementById('chat-messages');
+      if (msgs.length) {
+        msgsEl.innerHTML = msgs.map(m => renderMessage(m, user.id)).join('');
+      } else {
+        msgsEl.innerHTML = '<p style="text-align:center;color:var(--color-text-muted);font-size:0.875rem">No messages yet. Say hello!</p>';
+      }
+      msgsEl.scrollTop = msgsEl.scrollHeight;
+
+      await markThreadRead(convId);
+      loadConversations();
+
+      // Send
+      const sendBtn = document.getElementById('send-btn');
+      const chatInput = document.getElementById('chat-input');
+
+      async function doSend() {
+        const content = chatInput.value.trim();
+        if (!content) return;
+        chatInput.value = '';
+        try {
+          const msg = await sendMessage(convId, user.id, content);
+          msgsEl.innerHTML += renderMessage(msg, user.id);
+          msgsEl.scrollTop = msgsEl.scrollHeight;
+        } catch (err) { console.error(err); }
+      }
+
+      sendBtn.addEventListener('click', doSend);
+      chatInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); } });
+
+      // Realtime
+      realtimeSub = subscribeToConversation(convId, msg => {
+        if (msg.sender_id !== user.id) {
+          msgsEl.innerHTML += renderMessage(msg, user.id);
+          msgsEl.scrollTop = msgsEl.scrollHeight;
+          // The thread is open on screen, so an incoming message is
+          // read the moment it arrives — otherwise the badge count
+          // drifts until the page is reloaded.
+          if (activeConvId === convId) {
+            markThreadRead(convId).then(loadConversations);
+          }
+        }
+      });
+    }
+
+    loadConversations();
+  </script>
+</body>
+</html>

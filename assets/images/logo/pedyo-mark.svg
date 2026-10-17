@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-label="Pedyo">
+  <defs>
+    <linearGradient id="p-pin" x1="4" y1="2" x2="20" y2="22" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1E9B70"/>
+      <stop offset="1" stop-color="#0A5240"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#p-pin)" d="M12 22.6C12 22.6 4.1 14.9 4.1 9.6a7.9 7.9 0 1 1 15.8 0c0 5.3-7.9 13-7.9 13Z"/>
+  <g fill="none" stroke="#31B37C" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8.5 5.2v8.8"/>
+    <path d="M8.5 5.2h3.6a2.7 2.7 0 0 1 0 5.4H8.5"/>
+  </g>
+  <path fill="none" stroke="#F4B942" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="m12.1 8.5 1.8 1.8 3.6-4.2"/>
+</svg>

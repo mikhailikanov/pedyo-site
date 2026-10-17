@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Find Providers – Pedyo</title>
+<meta content="Search for trusted local service providers in Harare and Chitungwiza." name="description"/>
+<link href="/assets/images/logo/pedyo-mark.svg" rel="icon" type="image/svg+xml"/>
+<link href="/assets/css/reset.css" rel="stylesheet"/>
+<link href="/assets/css/tokens.css" rel="stylesheet"/>
+<link href="/assets/css/components.css" rel="stylesheet"/>
+<link href="/assets/css/layout.css" rel="stylesheet"/>
+<link href="/assets/css/pages.css" rel="stylesheet"/>
+</head>
+<body class="page-wrapper">
+<div id="nav-placeholder"></div>
+<main class="main-content">
+<div class="section-sm" style="background:var(--color-bg);border-bottom:1px solid var(--color-border)">
+<div class="container">
+<h1 style="font-size:var(--font-size-2xl);font-weight:800;margin-bottom:16px">Find Service Providers</h1>
+<div class="search-bar">
+<svg fill="none" height="20" stroke="var(--color-text-muted)" stroke-width="2" viewbox="0 0 24 24" width="20"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+<input autocomplete="off" id="search-input" placeholder="Search by name, service or description…" type="text"/>
+<button class="btn btn-primary btn-sm" id="search-btn">Search</button>
+</div>
+</div>
+</div>
+<div class="section-sm">
+<div class="container">
+<div class="search-layout">
+<!-- Filters -->
+<aside class="search-filters">
+<h3>Filters</h3>
+<div class="filter-group">
+<label>Category</label>
+<select class="form-select" id="filter-category">
+<option value="">All categories</option>
+</select>
+</div>
+<div class="filter-group">
+<label>Provider type</label>
+<label class="filter-option"><input name="type" type="radio" value=""/> All</label>
+<label class="filter-option"><input name="type" type="radio" value="individual"/> Individual</label>
+<label class="filter-option"><input name="type" type="radio" value="business"/> Business</label>
+</div>
+<div class="filter-group">
+<label>Verification</label>
+<label class="filter-option"><input name="verification" type="radio" value=""/> All</label>
+<label class="filter-option"><input name="verification" type="radio" value="verified"/> Verified identity</label>
+</div>
+<button class="btn btn-outline w-full" id="clear-filters">Clear filters</button>
+</aside>
+<!-- Results -->
+<div>
+<div class="search-results-header">
+<span class="search-results-count" id="results-count">Loading…</span>
+<select class="form-select" id="sort-select" style="width:auto">
+<option value="newest">Newest first</option>
+<option value="rating">Top rated</option>
+<option value="name">Name A–Z</option>
+</select>
+</div>
+<div class="grid-auto" id="results-grid"></div>
+<div class="empty-state hidden" id="results-empty">
+<svg fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+<h3>No providers found</h3>
+<p>Try adjusting your search or filters.</p>
+</div>
+<div id="pagination" style="margin-top:32px"></div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<div id="footer-placeholder"></div>
+<script type="module">
+    import { renderNav, renderFooter } from '/assets/js/nav-html.js';
+    import { initNav } from '/assets/js/nav.js';
+    import { loadCategories } from '/assets/js/categories.js';
+    import { searchProviders, renderProviderCard } from '/assets/js/providers.js';
+    import { getQueryParam } from '/assets/js/ui.js';
+
+    document.getElementById('nav-placeholder').innerHTML = renderNav('search');
+    document.getElementById('footer-placeholder').innerHTML = renderFooter();
+    initNav();
+
+    let currentPage = 1;
+    const LIMIT = 12;
+
+    // Read URL params
+    const urlQ    = getQueryParam('q') || '';
+    const urlCat  = getQueryParam('category') || '';
+    if (urlQ) document.getElementById('search-input').value = urlQ;
+
+    // Load categories
+    const cats = await loadCategories();
+    const catSel = document.getElementById('filter-category');
+    cats.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.name; opt.textContent = c.name;
+      if (c.name === urlCat) opt.selected = true;
+      catSel.appendChild(opt);
+    });
+
+    async function doSearch(page = 1) {
+      currentPage = page;
+      const query    = document.getElementById('search-input').value.trim();
+      const category = document.getElementById('filter-category').value;
+      const type     = document.querySelector('input[name="type"]:checked')?.value || '';
+      const verif    = document.querySelector('input[name="verification"]:checked')?.value || '';
+      const sort     = document.getElementById('sort-select').value;
+
+      document.getElementById('results-count').textContent = 'Searching…';
+      document.getElementById('results-grid').innerHTML = '';
+      document.getElementById('results-empty').classList.add('hidden');
+
+      const { providers, total } = await searchProviders({ query, category, type, verification: verif, sort, page, limit: LIMIT });
+
+      document.getElementById('results-count').textContent =
+        total === 0 ? 'No providers found' : `${total} provider${total !== 1 ? 's' : ''} found`;
+
+      const grid = document.getElementById('results-grid');
+      if (providers.length) {
+        grid.innerHTML = providers.map(p => renderProviderCard(p)).join('');
+      } else {
+        document.getElementById('results-empty').classList.remove('hidden');
+      }
+
+      // Pagination
+      const pages = Math.ceil(total / LIMIT);
+      const pag = document.getElementById('pagination');
+      if (pages > 1) {
+        pag.innerHTML = Array.from({ length: pages }, (_, i) => i + 1)
+          .map(p => `<button class="page-btn ${p === page ? 'active' : ''}" data-page="${p}">${p}</button>`)
+          .join('');
+        pag.querySelectorAll('.page-btn').forEach(btn =>
+          btn.addEventListener('click', () => doSearch(+btn.dataset.page))
+        );
+      } else {
+        pag.innerHTML = '';
+      }
+    }
+
+    document.getElementById('search-btn').addEventListener('click', () => doSearch(1));
+    document.getElementById('search-input').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(1); });
+    document.getElementById('filter-category').addEventListener('change', () => doSearch(1));
+    document.getElementById('sort-select').addEventListener('change', () => doSearch(1));
+    document.querySelectorAll('input[name="type"], input[name="verification"]').forEach(r =>
+      r.addEventListener('change', () => doSearch(1))
+    );
+    document.getElementById('clear-filters').addEventListener('click', () => {
+      document.getElementById('search-input').value = '';
+      document.getElementById('filter-category').value = '';
+      document.querySelectorAll('input[name="type"]')[0].checked = true;
+      document.querySelectorAll('input[name="verification"]')[0].checked = true;
+      doSearch(1);
+    });
+
+    doSearch(1);
+  </script>
+</body>
+</html>

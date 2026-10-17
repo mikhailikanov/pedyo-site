@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>My Provider Profiles – Pedyo</title>
+<link href="/assets/images/logo/pedyo-mark.svg" rel="icon" type="image/svg+xml"/>
+<link href="/assets/css/reset.css" rel="stylesheet"/>
+<link href="/assets/css/tokens.css" rel="stylesheet"/>
+<link href="/assets/css/components.css" rel="stylesheet"/>
+<link href="/assets/css/layout.css" rel="stylesheet"/>
+<link href="/assets/css/pages.css" rel="stylesheet"/>
+</head>
+<body class="page-wrapper">
+<div id="nav-placeholder"></div>
+<main class="main-content">
+<div class="section-sm">
+<div class="container">
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:32px;flex-wrap:wrap;gap:16px">
+<div>
+<h1 style="font-size:var(--font-size-2xl);font-weight:800">My Provider Profiles</h1>
+<p style="color:var(--color-text-muted);margin-top:4px">Manage your service listings on Pedyo</p>
+</div>
+<a class="btn btn-primary" href="/account/become-provider.html">+ New Profile</a>
+</div>
+<div id="profiles-alert"></div>
+<div id="profiles-list">
+<div style="text-align:center;padding:40px"><div class="spinner" style="margin:0 auto"></div></div>
+</div>
+</div>
+</div>
+</main>
+<div id="footer-placeholder"></div>
+<!-- Edit modal -->
+<div class="modal-overlay hidden" id="edit-modal">
+<div class="modal" style="max-width:560px">
+<button class="modal-close" id="edit-modal-close">✕</button>
+<h2 style="font-size:1.25rem;font-weight:700;margin-bottom:20px">Edit Provider Profile</h2>
+<div id="edit-alert"></div>
+<form id="edit-form" style="display:flex;flex-direction:column;gap:16px">
+<input id="edit-profile-id" type="hidden"/>
+<div class="form-group">
+<label class="form-label" for="edit-name">Business / display name</label>
+<input class="form-input" id="edit-name" required="" type="text"/>
+</div>
+<div class="form-group">
+<label class="form-label" for="edit-description">Description</label>
+<textarea class="form-textarea" id="edit-description" rows="4"></textarea>
+</div>
+<div class="form-group">
+<label class="form-label">Services offered</label>
+<div class="service-list" id="edit-service-list"></div>
+<button class="btn btn-ghost btn-sm" id="edit-service-add" type="button">+ Add another service</button>
+</div>
+<div class="form-group">
+<label class="form-label" for="edit-areas">Coverage areas</label>
+<input class="form-input" id="edit-areas" placeholder="e.g. Harare CBD, Chitungwiza" type="text"/>
+<span class="form-hint">Comma-separated list of areas you serve</span>
+</div>
+<div class="form-group">
+<label class="form-label" for="edit-whatsapp">WhatsApp number</label>
+<input class="form-input" id="edit-whatsapp" placeholder="+263 7X XXX XXXX" type="tel"/>
+</div>
+<div class="form-group">
+<label class="form-label" for="edit-availability">Availability note</label>
+<input class="form-input" id="edit-availability" type="text"/>
+</div>
+<div style="display:flex;gap:12px">
+<button class="btn btn-primary" id="edit-save-btn" type="submit">Save Changes</button>
+<button class="btn btn-ghost" id="edit-cancel-btn" type="button">Cancel</button>
+</div>
+</form>
+</div>
+</div>
+<script type="module">
+    import { renderNav, renderFooter } from '/assets/js/nav-html.js';
+    import { initNav } from '/assets/js/nav.js';
+    import { supabase } from '/assets/js/supabase-client.js';
+    import { getMyProviderProfiles, updateProviderProfile, submitForReview, saveProviderServices, saveServiceAreas, initServiceList } from '/assets/js/providers.js';
+    import { uploadProviderLogo, uploadGalleryImage } from '/assets/js/storage.js';
+    import { showAlert, setLoading, escapeHtml, formatDate } from '/assets/js/ui.js';
+    import { requireAuth } from '/assets/js/auth.js';
+
+    document.getElementById('nav-placeholder').innerHTML = renderNav('');
+    document.getElementById('footer-placeholder').innerHTML = renderFooter();
+    initNav();
+
+    if (!await requireAuth('/providers.html')) throw new Error();
+
+    const { data: { user } } = await supabase.auth.getUser();
+    const profiles = await getMyProviderProfiles(user.id);
+    const listEl = document.getElementById('profiles-list');
+
+    const serviceEditor = initServiceList(
+      document.getElementById('edit-service-list'),
+      [],
+      document.getElementById('edit-service-add')
+    );
+
+    const STATUS_BADGE = {
+      draft:    '<span class="badge badge-gray">Draft</span>',
+      pending:  '<span class="badge badge-gold">Under Review</span>',
+      approved: '<span class="badge badge-green">Approved</span>',
+      rejected: '<span class="badge badge-red">Rejected</span>',
+      suspended:'<span class="badge badge-red">Suspended</span>'
+    };
+
+    if (!profiles.length) {
+      listEl.innerHTML = `
+        <div class="empty-state">
+          <div style="font-size:3rem;margin-bottom:16px">🏢</div>
+          <h3>No provider profiles yet</h3>
+          <p>Create your first provider profile to start receiving customers.</p>
+          <a href="/account/become-provider.html" class="btn btn-primary" style="margin-top:16px">Create Profile</a>
+        </div>`;
+    } else {
+      listEl.innerHTML = profiles.map(p => `
+        <div class="card" style="margin-bottom:16px">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+                <h2 style="font-size:1.125rem;font-weight:700">${escapeHtml(p.business_name)}</h2>
+                ${STATUS_BADGE[p.status] || ''}
+              </div>
+              <p style="font-size:0.875rem;color:var(--color-text-muted);margin-bottom:8px">${escapeHtml(p.description || 'No description')}</p>
+              ${p.status === 'rejected' && p.rejection_reason ? `<div class="alert alert-error" style="margin-bottom:8px"><span>✕</span><span>Rejected: ${escapeHtml(p.rejection_reason)}</span></div>` : ''}
+              <div style="font-size:0.8rem;color:var(--color-text-muted)">Created ${formatDate(p.created_at)}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;flex-shrink:0">
+              <button class="btn btn-outline btn-sm edit-btn" data-id="${p.id}" data-name="${escapeHtml(p.business_name)}" data-desc="${escapeHtml(p.description||'')}" data-wa="${escapeHtml(p.whatsapp_number||'')}" data-avail="${escapeHtml(p.availability_note||'')}">Edit</button>
+              ${p.status === 'approved' ? `<a href="/provider.html?slug=${p.slug}" class="btn btn-ghost btn-sm">View public</a>` : ''}
+              ${['draft','rejected'].includes(p.status) ? `<button class="btn btn-primary btn-sm submit-btn" data-id="${p.id}">Submit for Review</button>` : ''}
+              <label class="btn btn-ghost btn-sm" style="cursor:pointer">
+                Upload photo
+                <input type="file" class="gallery-input" data-id="${p.id}" accept="image/*" style="display:none">
+              </label>
+            </div>
+          </div>
+        </div>`).join('');
+
+      // Edit buttons
+      document.querySelectorAll('.edit-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const p = profiles.find(x => x.id === btn.dataset.id);
+          document.getElementById('edit-profile-id').value = btn.dataset.id;
+          document.getElementById('edit-name').value = btn.dataset.name;
+          document.getElementById('edit-description').value = btn.dataset.desc;
+          document.getElementById('edit-whatsapp').value = btn.dataset.wa;
+          document.getElementById('edit-availability').value = btn.dataset.avail;
+          serviceEditor.setRows((p?.provider_services || []).map(s => ({
+            id: s.id, service_name: s.service_name, price_note: s.price_note
+          })));
+          document.getElementById('edit-areas').value =
+            (p?.service_areas || []).map(a => a.area_name).join(', ');
+          document.getElementById('edit-modal').classList.remove('hidden');
+        });
+      });
+
+      // Submit for review
+      document.querySelectorAll('.submit-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          if (!confirm('Submit this profile for admin review?')) return;
+          try {
+            await submitForReview(btn.dataset.id);
+            showAlert(document.getElementById('profiles-alert'), 'Profile submitted for review!', 'success');
+            setTimeout(() => location.reload(), 1500);
+          } catch (err) {
+            showAlert(document.getElementById('profiles-alert'), err.message || 'Failed to submit.');
+          }
+        });
+      });
+
+      // Gallery upload
+      document.querySelectorAll('.gallery-input').forEach(input => {
+        input.addEventListener('change', async e => {
+          const file = e.target.files[0];
+          if (!file) return;
+          try {
+            await uploadGalleryImage(input.dataset.id, file);
+            showAlert(document.getElementById('profiles-alert'), 'Photo uploaded and pending moderation.', 'success');
+          } catch (err) {
+            showAlert(document.getElementById('profiles-alert'), err.message || 'Upload failed.');
+          }
+        });
+      });
+    }
+
+    // Edit modal
+    document.getElementById('edit-modal-close').addEventListener('click', () => document.getElementById('edit-modal').classList.add('hidden'));
+    document.getElementById('edit-cancel-btn').addEventListener('click', () => document.getElementById('edit-modal').classList.add('hidden'));
+    document.getElementById('edit-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const btn = document.getElementById('edit-save-btn');
+      const alertEl = document.getElementById('edit-alert');
+      setLoading(btn, true, 'Saving…');
+      try {
+        const profileId = document.getElementById('edit-profile-id').value;
+        const profile = profiles.find(p => p.id === profileId);
+        await updateProviderProfile(profileId, {
+          business_name: document.getElementById('edit-name').value.trim(),
+          description: document.getElementById('edit-description').value.trim(),
+          whatsapp_number: document.getElementById('edit-whatsapp').value.trim(),
+          availability_note: document.getElementById('edit-availability').value.trim()
+        });
+        // Services carry the profile's primary_category, which is what
+        // category browse joins on.
+        await saveProviderServices(profileId, serviceEditor.read(), profile?.primary_category);
+        await saveServiceAreas(profileId,
+          document.getElementById('edit-areas').value.split(',').map(a => a.trim()).filter(Boolean));
+        document.getElementById('edit-modal').classList.add('hidden');
+        showAlert(document.getElementById('profiles-alert'), 'Profile updated!', 'success');
+        setTimeout(() => location.reload(), 1500);
+      } catch (err) {
+        showAlert(alertEl, err.message || 'Failed to save.');
+        setLoading(btn, false, 'Save Changes');
+      }
+    });
+  </script>
+</body>
+</html>

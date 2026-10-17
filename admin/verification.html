@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Verification Docs – Pedyo Admin</title>
+<link href="/assets/images/logo/pedyo-mark.svg" rel="icon" type="image/svg+xml"/>
+<link href="/assets/css/reset.css" rel="stylesheet"/>
+<link href="/assets/css/tokens.css" rel="stylesheet"/>
+<link href="/assets/css/components.css" rel="stylesheet"/>
+<link href="/assets/css/layout.css" rel="stylesheet"/>
+<link href="/assets/css/pages.css" rel="stylesheet"/>
+</head>
+<body class="page-wrapper">
+<div id="nav-placeholder"></div>
+<div class="dashboard-layout">
+<nav class="sidebar" id="admin-sidebar"></nav>
+<main class="dashboard-main">
+<div class="dashboard-header">
+<h1>Verification Documents</h1>
+<p>Review provider identity and business document submissions. Documents are accessed via 60-second signed URLs.</p>
+</div>
+<div id="verif-alert"></div>
+<div id="verif-list">
+<div style="text-align:center;padding:40px"><div class="spinner" style="margin:0 auto"></div></div>
+</div>
+</main>
+</div>
+<script type="module">
+    import { renderNav } from '/assets/js/nav-html.js';
+    import { initNav } from '/assets/js/nav.js';
+    import { requireAdmin, getVerificationRequests, getVerificationDocUrl, setVerificationBadge } from '/assets/js/admin.js';
+    import { renderAdminSidebar } from '/assets/js/shared-nav.js';
+    import { supabase } from '/assets/js/supabase-client.js';
+    import { escapeHtml, formatDate, showAlert, askText } from '/assets/js/ui.js';
+
+    document.getElementById('nav-placeholder').innerHTML = renderNav('');
+    initNav();
+    const adminUser = await requireAdmin();
+    if (!adminUser) throw new Error();
+    document.getElementById('admin-sidebar').innerHTML = renderAdminSidebar('verification');
+
+    const requests = await getVerificationRequests();
+    const listEl = document.getElementById('verif-list');
+
+    if (!requests.length) {
+      listEl.innerHTML = '<div class="empty-state"><p>No pending verification requests.</p></div>';
+    } else {
+      listEl.innerHTML = requests.map(r => `
+        <div class="card" style="margin-bottom:16px" id="verif-card-${r.id}">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap">
+            <div style="flex:1">
+              <div style="font-weight:700;margin-bottom:4px">${escapeHtml(r.profiles?.full_name || 'Unknown')}</div>
+              <div style="font-size:0.8rem;color:var(--color-text-muted);margin-bottom:4px">${escapeHtml(r.profiles?.email || '')}</div>
+              <div style="font-size:0.8rem;margin-bottom:4px">Provider: <strong>${escapeHtml(r.provider_profiles?.business_name || 'N/A')}</strong></div>
+              <div style="font-size:0.8rem;margin-bottom:4px">Document type: <span class="badge badge-blue">${escapeHtml(r.document_type)}</span></div>
+              ${r.notes ? `<div style="font-size:0.8rem;color:var(--color-text-muted)">Notes: ${escapeHtml(r.notes)}</div>` : ''}
+              <div style="font-size:0.75rem;color:var(--color-text-muted);margin-top:6px">Submitted ${formatDate(r.created_at)}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;flex-shrink:0">
+              <button class="btn btn-outline btn-sm view-doc-btn" data-path="${escapeHtml(r.storage_path)}" data-id="${r.id}">View Document</button>
+              <button class="btn btn-primary btn-sm approve-verif-btn" data-id="${r.id}" data-provider="${r.provider_profile_id}" data-type="${r.document_type}">Mark Reviewed</button>
+              <button class="btn btn-danger btn-sm reject-verif-btn" data-id="${r.id}">Reject</button>
+            </div>
+          </div>
+        </div>`).join('');
+
+      // View doc (signed URL)
+      listEl.querySelectorAll('.view-doc-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          try {
+            const url = await getVerificationDocUrl(btn.dataset.path);
+            window.open(url, '_blank', 'noopener');
+          } catch (err) {
+            showAlert(document.getElementById('verif-alert'), 'Failed to load document: ' + (err.message || ''));
+          }
+        });
+      });
+
+      // Approve (mark reviewed + set badge)
+      listEl.querySelectorAll('.approve-verif-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          try {
+            // Update request status
+            await supabase.from('verification_requests').update({ status: 'approved', reviewed_by: adminUser.id, reviewed_at: new Date().toISOString() }).eq('id', btn.dataset.id);
+            // Set appropriate badge
+            const badgeMap = { national_id: 'identity_reviewed', passport: 'identity_reviewed', business_registration: 'business_docs_reviewed' };
+            const badge = badgeMap[btn.dataset.type];
+            if (badge) await setVerificationBadge(btn.dataset.provider, badge, true, adminUser.id);
+            document.getElementById(`verif-card-${btn.dataset.id}`)?.remove();
+            showAlert(document.getElementById('verif-alert'), 'Document reviewed and badge applied.', 'success');
+          } catch (err) {
+            showAlert(document.getElementById('verif-alert'), err.message || 'Failed.');
+          }
+        });
+      });
+
+      // Reject
+      listEl.querySelectorAll('.reject-verif-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const reason = askText('Reason for rejection:');
+          if (reason === null) return;
+          try {
+            await supabase.from('verification_requests').update({ status: 'rejected', rejection_reason: (reason || '').trim() || 'Rejected by admin', reviewed_by: adminUser.id }).eq('id', btn.dataset.id);
+            document.getElementById(`verif-card-${btn.dataset.id}`)?.remove();
+            showAlert(document.getElementById('verif-alert'), 'Request rejected.', 'success');
+          } catch (err) {
+            showAlert(document.getElementById('verif-alert'), err.message || 'Failed.');
+          }
+        });
+      });
+    }
+  </script>
+</body>
+</html>

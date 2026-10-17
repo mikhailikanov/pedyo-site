@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Provider Queue – Pedyo Admin</title>
+<link href="/assets/images/logo/pedyo-mark.svg" rel="icon" type="image/svg+xml"/>
+<link href="/assets/css/reset.css" rel="stylesheet"/>
+<link href="/assets/css/tokens.css" rel="stylesheet"/>
+<link href="/assets/css/components.css" rel="stylesheet"/>
+<link href="/assets/css/layout.css" rel="stylesheet"/>
+<link href="/assets/css/pages.css" rel="stylesheet"/>
+</head>
+<body class="page-wrapper">
+<div id="nav-placeholder"></div>
+<div class="dashboard-layout">
+<nav class="sidebar" id="admin-sidebar"></nav>
+<main class="dashboard-main">
+<div class="dashboard-header">
+<h1>Provider Queue</h1>
+<p>Review and approve provider profile submissions</p>
+</div>
+<div id="queue-alert"></div>
+<!-- Tabs -->
+<div class="tabs" id="queue-tabs" style="margin-bottom:24px">
+<button class="tab-btn active" data-tab="tab-pending">Pending</button>
+<button class="tab-btn" data-tab="tab-approved">Approved</button>
+<button class="tab-btn" data-tab="tab-rejected">Rejected</button>
+<button class="tab-btn" data-tab="tab-suspended">Suspended</button>
+</div>
+<div class="tab-panel active" id="tab-pending">
+<div id="pending-list"><div class="spinner" style="margin:0 auto"></div></div>
+</div>
+<div class="tab-panel" id="tab-approved">
+<div id="approved-list"><div class="spinner" style="margin:0 auto"></div></div>
+</div>
+<div class="tab-panel" id="tab-rejected">
+<div id="rejected-list"><div class="spinner" style="margin:0 auto"></div></div>
+</div>
+<div class="tab-panel" id="tab-suspended">
+<div id="suspended-list"><div class="spinner" style="margin:0 auto"></div></div>
+</div>
+</main>
+</div>
+<!-- Reject modal -->
+<div class="modal-overlay hidden" id="reject-modal">
+<div class="modal">
+<button class="modal-close" id="reject-close">✕</button>
+<h2 style="font-size:1.25rem;font-weight:700;margin-bottom:16px">Reject Provider</h2>
+<input id="reject-profile-id" type="hidden"/>
+<div class="form-group" style="margin-bottom:16px">
+<label class="form-label" for="reject-reason">Reason for rejection</label>
+<textarea class="form-textarea" id="reject-reason" placeholder="Explain why this profile is being rejected…" rows="3"></textarea>
+</div>
+<div id="reject-alert"></div>
+<button class="btn btn-danger w-full" id="reject-confirm-btn">Confirm Rejection</button>
+</div>
+</div>
+<script type="module">
+    import { renderNav } from '/assets/js/nav-html.js';
+    import { initNav } from '/assets/js/nav.js';
+    import { requireAdmin, approveProvider, rejectProvider, suspendProvider, setVerificationBadge } from '/assets/js/admin.js';
+    import { renderAdminSidebar } from '/assets/js/shared-nav.js';
+    import { supabase } from '/assets/js/supabase-client.js';
+    import { escapeHtml, formatDate, showAlert, setLoading, initTabs, askText } from '/assets/js/ui.js';
+
+    document.getElementById('nav-placeholder').innerHTML = renderNav('');
+    initNav();
+    const adminUser = await requireAdmin();
+    if (!adminUser) throw new Error();
+    document.getElementById('admin-sidebar').innerHTML = renderAdminSidebar('providers');
+    initTabs(document.getElementById('queue-tabs').parentElement);
+
+    const STATUS_BADGE = {
+      pending:  '<span class="badge badge-gold">Pending</span>',
+      approved: '<span class="badge badge-green">Approved</span>',
+      rejected: '<span class="badge badge-red">Rejected</span>',
+      suspended:'<span class="badge badge-red">Suspended</span>',
+      draft:    '<span class="badge badge-gray">Draft</span>'
+    };
+
+    async function loadProviders(status, containerId) {
+      const el = document.getElementById(containerId);
+      const { data, error } = await supabase
+        .from('provider_profiles')
+        .select('*, profiles(full_name, email)')
+        .eq('status', status)
+        .order('created_at', { ascending: true });
+      if (error || !data?.length) {
+        el.innerHTML = `<div class="empty-state"><p>No ${status} providers.</p></div>`;
+        return;
+      }
+      el.innerHTML = data.map(p => `
+        <div class="card" style="margin-bottom:16px" id="provider-card-${p.id}">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+                <h3 style="font-weight:700">${escapeHtml(p.business_name)}</h3>
+                ${STATUS_BADGE[p.status] || ''}
+                <span class="badge badge-gray">${p.provider_type}</span>
+              </div>
+              <div style="font-size:0.8rem;color:var(--color-text-muted);margin-bottom:6px">
+                ${escapeHtml(p.profiles?.full_name || '')} · ${escapeHtml(p.profiles?.email || '')}
+              </div>
+              <p style="font-size:0.875rem;color:var(--color-text);margin-bottom:8px">${escapeHtml(p.description || 'No description')}</p>
+              ${p.rejection_reason ? `<div class="alert alert-error" style="margin-bottom:8px"><span>Rejection reason:</span><span>${escapeHtml(p.rejection_reason)}</span></div>` : ''}
+              <div style="font-size:0.75rem;color:var(--color-text-muted)">Submitted ${formatDate(p.created_at)}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;flex-shrink:0">
+              <a href="/admin/provider-review.html?id=${p.id}" class="btn btn-outline btn-sm">Full Review</a>
+              ${status === 'pending' ? `
+                <button class="btn btn-primary btn-sm approve-btn" data-id="${p.id}">Approve</button>
+                <button class="btn btn-danger btn-sm reject-btn" data-id="${p.id}">Reject</button>` : ''}
+              ${status === 'approved' ? `<button class="btn btn-danger btn-sm suspend-btn" data-id="${p.id}">Suspend</button>` : ''}
+              ${status === 'rejected' || status === 'suspended' ? `<button class="btn btn-primary btn-sm approve-btn" data-id="${p.id}">Approve</button>` : ''}
+            </div>
+          </div>
+        </div>`).join('');
+
+      // Approve
+      el.querySelectorAll('.approve-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          setLoading(btn, true, 'Approving…');
+          try {
+            await approveProvider(btn.dataset.id, adminUser.id);
+            document.getElementById(`provider-card-${btn.dataset.id}`)?.remove();
+            showAlert(document.getElementById('queue-alert'), 'Provider approved!', 'success');
+          } catch (err) {
+            showAlert(document.getElementById('queue-alert'), err.message || 'Failed.');
+            setLoading(btn, false, 'Approve');
+          }
+        });
+      });
+
+      // Reject
+      el.querySelectorAll('.reject-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.getElementById('reject-profile-id').value = btn.dataset.id;
+          document.getElementById('reject-modal').classList.remove('hidden');
+        });
+      });
+
+      // Suspend
+      el.querySelectorAll('.suspend-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const reason = askText('Reason for suspension:');
+          if (reason === null) return;
+          try {
+            await suspendProvider(btn.dataset.id, adminUser.id, (reason || '').trim() || 'Suspended by admin');
+            document.getElementById(`provider-card-${btn.dataset.id}`)?.remove();
+            showAlert(document.getElementById('queue-alert'), 'Provider suspended.', 'success');
+          } catch (err) {
+            showAlert(document.getElementById('queue-alert'), err.message || 'Failed.');
+          }
+        });
+      });
+    }
+
+    // Reject modal
+    document.getElementById('reject-close').addEventListener('click', () => document.getElementById('reject-modal').classList.add('hidden'));
+    document.getElementById('reject-confirm-btn').addEventListener('click', async () => {
+      const id = document.getElementById('reject-profile-id').value;
+      const reason = document.getElementById('reject-reason').value.trim();
+      const alertEl = document.getElementById('reject-alert');
+      if (!reason) { showAlert(alertEl, 'Please provide a reason.'); return; }
+      try {
+        await rejectProvider(id, adminUser.id, reason);
+        document.getElementById('reject-modal').classList.add('hidden');
+        document.getElementById(`provider-card-${id}`)?.remove();
+        showAlert(document.getElementById('queue-alert'), 'Provider rejected.', 'success');
+      } catch (err) {
+        showAlert(alertEl, err.message || 'Failed.');
+      }
+    });
+
+    // Tab switching loads data lazily
+    const loaded = {};
+    async function ensureLoaded(status, containerId) {
+      if (!loaded[status]) {
+        loaded[status] = true;
+        await loadProviders(status, containerId);
+      }
+    }
+
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        const panel = document.getElementById(btn.dataset.tab);
+        if (panel) panel.classList.add('active');
+        const map = { 'tab-pending': ['pending','pending-list'], 'tab-approved': ['approved','approved-list'], 'tab-rejected': ['rejected','rejected-list'], 'tab-suspended': ['suspended','suspended-list'] };
+        const [status, containerId] = map[btn.dataset.tab] || [];
+        if (status) await ensureLoaded(status, containerId);
+      });
+    });
+
+    await ensureLoaded('pending', 'pending-list');
+  </script>
+</body>
+</html>

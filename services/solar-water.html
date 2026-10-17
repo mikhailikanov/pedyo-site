@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Solar, Inverters &amp; Water – Pedyo</title>
+<link href="/assets/images/logo/pedyo-mark.svg" rel="icon" type="image/svg+xml"/>
+<link href="/assets/css/reset.css" rel="stylesheet"/>
+<link href="/assets/css/tokens.css" rel="stylesheet"/>
+<link href="/assets/css/components.css" rel="stylesheet"/>
+<link href="/assets/css/layout.css" rel="stylesheet"/>
+<link href="/assets/css/pages.css" rel="stylesheet"/>
+</head>
+<body class="page-wrapper">
+<div id="nav-placeholder"></div>
+<main class="main-content">
+<div class="page-hero">
+<div style="font-size:3rem;margin-bottom:12px">☀️</div>
+<h1>Solar, Inverters &amp; Water</h1>
+<p>Find trusted solar installation, inverter and water system providers near you</p>
+</div>
+<section class="section">
+<div class="container">
+<div class="grid-auto" id="providers-grid">
+<div style="text-align:center;padding:40px;grid-column:1/-1"><div class="spinner" style="margin:0 auto"></div></div>
+</div>
+<div class="empty-state hidden" id="empty-state">
+<p>No providers available yet in this category.</p>
+<a class="btn btn-primary" href="/account/become-provider.html" style="margin-top:16px">Be the first provider</a>
+</div>
+</div>
+</section>
+</main>
+<div id="footer-placeholder"></div>
+<script type="module">
+    import { renderNav, renderFooter } from '/assets/js/nav-html.js';
+    import { initNav } from '/assets/js/nav.js';
+    import { searchProviders, renderProviderCard } from '/assets/js/providers.js';
+    document.getElementById('nav-placeholder').innerHTML = renderNav('services');
+    document.getElementById('footer-placeholder').innerHTML = renderFooter();
+    initNav();
+    const { providers } = await searchProviders({ category: 'Solar, Inverters & Water', limit: 24 });
+    const grid = document.getElementById('providers-grid');
+    if (providers.length) {
+      grid.innerHTML = providers.map(p => renderProviderCard(p)).join('');
+    } else {
+      grid.innerHTML = '';
+      document.getElementById('empty-state').classList.remove('hidden');
+    }
+  </script>
+</body>
+</html>

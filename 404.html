@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Page Not Found – Pedyo</title>
+<link href="/assets/images/logo/pedyo-mark.svg" rel="icon" type="image/svg+xml"/>
+<link href="/assets/css/reset.css" rel="stylesheet"/>
+<link href="/assets/css/tokens.css" rel="stylesheet"/>
+<link href="/assets/css/components.css" rel="stylesheet"/>
+<link href="/assets/css/layout.css" rel="stylesheet"/>
+<link href="/assets/css/pages.css" rel="stylesheet"/>
+</head>
+<body class="page-wrapper">
+<div id="nav-placeholder"></div>
+<main class="main-content" style="display:flex;align-items:center;justify-content:center;min-height:60vh">
+<div class="empty-state">
+<div style="font-size:5rem;margin-bottom:16px">📍</div>
+<h1 style="font-size:var(--font-size-4xl);font-weight:800;color:var(--green);margin-bottom:8px">404</h1>
+<h2 style="font-size:var(--font-size-xl);font-weight:700;margin-bottom:12px">Page not found</h2>
+<p style="color:var(--color-text-muted);margin-bottom:32px;max-width:400px">
+        The page you're looking for doesn't exist or has been moved.
+      </p>
+<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+<a class="btn btn-primary" href="/">Go Home</a>
+<a class="btn btn-outline" href="/search.html">Find Providers</a>
+</div>
+</div>
+</main>
+<div id="footer-placeholder"></div>
+<script type="module">
+    import { renderNav, renderFooter } from '/assets/js/nav-html.js';
+    import { initNav } from '/assets/js/nav.js';
+    document.getElementById('nav-placeholder').innerHTML = renderNav('');
+    document.getElementById('footer-placeholder').innerHTML = renderFooter();
+    initNav();
+  </script>
+</body>
+</html>

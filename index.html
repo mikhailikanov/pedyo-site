@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Pedyo – Trusted services, close to you</title>
+<meta content="Find trusted local service providers in Harare and Chitungwiza. Plumbers, electricians, solar installers and more — close to you." name="description"/>
+<link href="/assets/images/logo/pedyo-mark.svg" rel="icon" type="image/svg+xml"/>
+<link href="/assets/css/reset.css" rel="stylesheet"/>
+<link href="/assets/css/tokens.css" rel="stylesheet"/>
+<link href="/assets/css/components.css" rel="stylesheet"/>
+<link href="/assets/css/layout.css" rel="stylesheet"/>
+<link href="/assets/css/pages.css" rel="stylesheet"/>
+</head>
+<body class="page-wrapper">
+<div id="nav-placeholder"></div>
+<main class="main-content">
+<!-- Hero -->
+<section class="hero">
+<div class="hero-inner">
+<div class="hero-text">
+<p class="hero-eyebrow"><b>New</b> Now live in Harare &amp; Chitungwiza</p>
+<h1 class="hero-title">
+Trusted services,<br/>
+            close to <span>you.</span>
+</h1>
+<p class="hero-subtitle">
+            Browse verified plumbers, electricians, solar installers and more without signing in.
+            Message them, check their work and hire the one nearby.
+          </p>
+<div class="hero-actions">
+<a class="btn btn-accent btn-lg" href="/search.html">Find a Provider</a>
+<a class="btn btn-glass btn-lg" href="/account/become-provider.html">List Your Services</a>
+</div>
+<div class="hero-stats">
+<div>
+<div class="hero-stat-num" id="stat-providers">—</div>
+<div class="hero-stat-label">Providers</div>
+</div>
+<div>
+<div class="hero-stat-num" id="stat-categories">12</div>
+<div class="hero-stat-label">Categories</div>
+</div>
+<div>
+<div class="hero-stat-num">2</div>
+<div class="hero-stat-label">Cities</div>
+</div>
+</div>
+</div>
+<div class="hero-search">
+<h3>Search providers</h3>
+<p>Filter by what you need and where you are.</p>
+<form class="hero-search-form" id="hero-search-form">
+<div class="form-group">
+<input class="form-input" id="hero-query" placeholder="e.g. plumber, solar installer…" type="text"/>
+</div>
+<div class="form-group">
+<select class="form-select" id="hero-category">
+<option value="">All categories</option>
+</select>
+</div>
+<button class="btn btn-primary w-full" type="submit">Search</button>
+</form>
+</div>
+</div>
+</section>
+<!-- Categories -->
+<section class="section" style="background:var(--color-bg)">
+<div class="container">
+<h2 class="section-title text-center">Browse by Service</h2>
+<p class="section-subtitle text-center">12 categories covering the services you need most</p>
+<div class="grid-auto" id="categories-grid">
+<div class="category-card" style="opacity:0.5">Loading…</div>
+</div>
+<div style="text-align:center;margin-top:32px">
+<a class="btn btn-outline" href="/services.html">View all services</a>
+</div>
+</div>
+</section>
+<!-- How it works -->
+<section class="section" style="background:#fff">
+<div class="container">
+<h2 class="section-title text-center">How Pedyo Works</h2>
+<p class="section-subtitle text-center">Find and hire trusted local providers in three simple steps</p>
+<div class="grid-3" style="margin-top:48px">
+<div class="how-step">
+<div class="how-step-num">1</div>
+<h3>Search &amp; Browse</h3>
+<p>Browse all service categories without signing in. Filter by location, provider type and verification level.</p>
+</div>
+<div class="how-step">
+<div class="how-step-num">2</div>
+<h3>View Profiles</h3>
+<p>See detailed provider profiles with services, coverage areas, work gallery and honest verification badges.</p>
+</div>
+<div class="how-step">
+<div class="how-step-num">3</div>
+<h3>Contact &amp; Hire</h3>
+<p>Send a message through Pedyo or contact via WhatsApp. Leave a review after your service is complete.</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Featured providers -->
+<section class="section" style="background:var(--color-bg)">
+<div class="container">
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:32px;flex-wrap:wrap;gap:16px">
+<div>
+<h2 class="section-title" style="margin-bottom:4px">Recent Providers</h2>
+<p style="color:var(--color-text-muted);font-size:0.875rem">Newly approved service providers on Pedyo</p>
+</div>
+<a class="btn btn-outline" href="/search.html">View all</a>
+</div>
+<div class="grid-auto" id="featured-providers">
+<div class="empty-state">
+<p>No providers available yet.</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Trust section -->
+<section class="section band-brand">
+<div class="container text-center">
+<h2 class="band-title">Honest verification. Real trust.</h2>
+<p class="band-lead">
+          Pedyo uses precise, honest verification labels. A badge means only what it states —
+          no vague "fully trusted" claims unless those checks have actually been performed.
+        </p>
+<div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center">
+<span class="verify-badge on-dark">✓ Email confirmed</span>
+<span class="verify-badge on-dark">✓ Contact confirmed</span>
+<span class="verify-badge on-dark">✓ Identity reviewed</span>
+<span class="verify-badge on-dark">✓ Business docs reviewed</span>
+<span class="verify-badge on-dark">✓ Founding provider</span>
+</div>
+<div style="margin-top:40px">
+<a class="btn btn-accent btn-lg" href="/account/become-provider.html">Become a Provider</a>
+</div>
+</div>
+</section>
+<!-- CTA -->
+<section class="section" style="background:#fff">
+<div class="container text-center">
+<h2 class="section-title">Ready to get started?</h2>
+<p class="section-subtitle">Join Pedyo today — free for customers and providers.</p>
+<div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap">
+<a class="btn btn-primary btn-lg" href="/account/register.html">Create free account</a>
+<a class="btn btn-outline btn-lg" href="/search.html">Browse providers</a>
+</div>
+</div>
+</section>
+</main>
+<div id="footer-placeholder"></div>
+<script type="module">
+    import { renderNav, renderFooter } from '/assets/js/nav-html.js';
+    import { initNav } from '/assets/js/nav.js';
+    import { loadCategories, renderCategoryGrid } from '/assets/js/categories.js';
+    import { searchProviders, renderProviderCard } from '/assets/js/providers.js';
+    import { supabase } from '/assets/js/supabase-client.js';
+
+    document.getElementById('nav-placeholder').innerHTML = renderNav('home');
+    document.getElementById('footer-placeholder').innerHTML = renderFooter();
+    initNav();
+
+    // Load categories
+    async function init() {
+      const cats = await loadCategories();
+      renderCategoryGrid(cats, document.getElementById('categories-grid'));
+
+      // Populate hero select
+      const sel = document.getElementById('hero-category');
+      cats.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.name; opt.textContent = c.name;
+        sel.appendChild(opt);
+      });
+
+      // Load provider count
+      const { count } = await supabase
+        .from('provider_profiles')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'approved');
+      document.getElementById('stat-providers').textContent = count || '0';
+
+      // Load featured providers
+      const { providers } = await searchProviders({ limit: 6 });
+      const grid = document.getElementById('featured-providers');
+      if (providers.length) {
+        grid.innerHTML = providers.map(p => renderProviderCard(p)).join('');
+      }
+    }
+
+    // Hero search form
+    document.getElementById('hero-search-form').addEventListener('submit', e => {
+      e.preventDefault();
+      const q = document.getElementById('hero-query').value.trim();
+      const cat = document.getElementById('hero-category').value;
+      const params = new URLSearchParams();
+      if (q) params.set('q', q);
+      if (cat) params.set('category', cat);
+      window.location.href = `/search.html?${params}`;
+    });
+
+    init();
+  </script>
+</body>
+</html>

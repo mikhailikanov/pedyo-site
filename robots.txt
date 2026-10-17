@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /account/
+Disallow: /messages.html
+Disallow: /provider-messages.html
+Disallow: /settings.html
+Disallow: /verification.html
+Disallow: /providers.html
+
+Sitemap: https://pedyo.pages.dev/sitemap.xml

@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Provider – Pedyo</title>
+<link href="/assets/images/logo/pedyo-mark.svg" rel="icon" type="image/svg+xml"/>
+<link href="/assets/css/reset.css" rel="stylesheet"/>
+<link href="/assets/css/tokens.css" rel="stylesheet"/>
+<link href="/assets/css/components.css" rel="stylesheet"/>
+<link href="/assets/css/layout.css" rel="stylesheet"/>
+<link href="/assets/css/pages.css" rel="stylesheet"/>
+</head>
+<body class="page-wrapper">
+<div id="nav-placeholder"></div>
+<main class="main-content" id="provider-main">
+<div class="empty-state" id="loading-state">
+<div class="spinner" style="margin:0 auto"></div>
+<p style="margin-top:16px">Loading provider…</p>
+</div>
+</main>
+<div id="footer-placeholder"></div>
+<!-- Message modal -->
+<div class="modal-overlay hidden" id="msg-modal">
+<div class="modal">
+<button class="modal-close" id="msg-modal-close">✕</button>
+<h2 style="font-size:1.25rem;font-weight:700;margin-bottom:8px">Send a Message</h2>
+<p id="msg-modal-to" style="font-size:0.875rem;color:var(--color-text-muted);margin-bottom:20px"></p>
+<div id="msg-modal-alert"></div>
+<div class="form-group" style="margin-bottom:16px">
+<label class="form-label" for="msg-content">Message</label>
+<textarea class="form-textarea" id="msg-content" placeholder="Describe what you need…" rows="4"></textarea>
+</div>
+<button class="btn btn-primary w-full" id="msg-send-btn">Send Message</button>
+</div>
+</div>
+<!-- Report modal -->
+<div class="modal-overlay hidden" id="report-modal">
+<div class="modal">
+<button class="modal-close" id="report-modal-close">✕</button>
+<h2 style="font-size:1.25rem;font-weight:700;margin-bottom:16px">Report Provider</h2>
+<div class="form-group" style="margin-bottom:16px">
+<label class="form-label" for="report-reason">Reason</label>
+<textarea class="form-textarea" id="report-reason" placeholder="Describe the issue…" rows="3"></textarea>
+</div>
+<div id="report-alert"></div>
+<button class="btn btn-danger w-full" id="report-submit-btn">Submit Report</button>
+</div>
+</div>
+<script type="module">
+    import { renderNav, renderFooter } from '/assets/js/nav-html.js';
+    import { initNav } from '/assets/js/nav.js';
+    import { getProviderBySlug } from '/assets/js/providers.js';
+    import { getProviderReviews, renderReviewCard, renderReviewForm, initStarPicker, submitReview } from '/assets/js/reviews.js';
+    import { startConversation } from '/assets/js/conversations.js';
+    import { supabase } from '/assets/js/supabase-client.js';
+    import { escapeHtml, formatDate, renderVerificationBadges, getQueryParam, showAlert, setLoading, avatarInitials } from '/assets/js/ui.js';
+
+    document.getElementById('nav-placeholder').innerHTML = renderNav('');
+    document.getElementById('footer-placeholder').innerHTML = renderFooter();
+    initNav();
+
+    const slug = getQueryParam('slug');
+    if (!slug) {
+      document.getElementById('provider-main').innerHTML = `<div class="empty-state"><h3>Provider not found</h3><p>No provider slug specified.</p><a href="/search.html" class="btn btn-primary" style="margin-top:16px">Browse providers</a></div>`;
+    } else {
+      loadProvider(slug);
+    }
+
+    async function loadProvider(slug) {
+      const provider = await getProviderBySlug(slug);
+      if (!provider) {
+        document.getElementById('provider-main').innerHTML = `<div class="empty-state"><h3>Provider not found</h3><p>This provider may not exist or is not yet approved.</p><a href="/search.html" class="btn btn-primary" style="margin-top:16px">Browse providers</a></div>`;
+        return;
+      }
+
+      document.title = `${provider.business_name || provider.profiles?.full_name} – Pedyo`;
+
+      const { data: { user } } = await supabase.auth.getUser();
+      const isOwner = user?.id === provider.user_id;
+      const initials = (provider.business_name || provider.profiles?.full_name || 'P').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+
+      const verBadges = renderVerificationBadges({
+        email_confirmed: provider.email_confirmed,
+        contact_confirmed: provider.contact_confirmed,
+        identity_reviewed: provider.identity_reviewed,
+        business_docs_reviewed: provider.business_docs_reviewed,
+        founding_provider: provider.founding_provider
+      });
+
+      const services = provider.provider_services || [];
+      const areas    = provider.service_areas || [];
+      const images   = (provider.provider_images || []).filter(i => i.moderation_status === 'approved');
+
+      document.getElementById('provider-main').innerHTML = `
+        <div class="provider-hero">
+          <div class="provider-hero-inner">
+            <div class="provider-hero-logo">${escapeHtml(initials)}</div>
+            <div style="flex:1;min-width:0">
+              <div class="provider-hero-name">${escapeHtml(provider.business_name || provider.profiles?.full_name)}</div>
+              <div class="provider-hero-meta">
+                <span>${provider.provider_type === 'business' ? '🏢 Business' : '👤 Individual'}</span>
+                ${areas.length ? `<span>📍 ${areas.slice(0,3).map(a=>escapeHtml(a.area_name)).join(', ')}</span>` : ''}
+                ${provider.whatsapp_number ? `<a href="https://wa.me/${provider.whatsapp_number.replace(/\D/g,'')}" target="_blank" rel="noopener" style="color:#25D366;font-weight:600">💬 WhatsApp</a>` : ''}
+              </div>
+              ${verBadges ? `<div class="provider-hero-badges">${verBadges}</div>` : ''}
+            </div>
+            <div class="provider-hero-actions">
+              ${!isOwner ? `<button class="btn btn-accent" id="btn-message">Send Message</button>` : `<a href="/providers.html" class="btn btn-outline" style="border-color:rgba(255,255,255,0.5);color:#fff">Edit Profile</a>`}
+              ${!isOwner ? `<button class="btn btn-ghost" id="btn-report" style="color:rgba(255,255,255,0.7);font-size:0.8rem">Report</button>` : ''}
+            </div>
+          </div>
+        </div>
+
+        <div class="provider-layout">
+          <div>
+            <!-- About -->
+            ${provider.description ? `
+            <div class="card" style="margin-bottom:24px">
+              <h2 style="font-size:1rem;font-weight:700;margin-bottom:12px">About</h2>
+              <p style="font-size:0.9rem;line-height:1.7;color:var(--color-text)">${escapeHtml(provider.description)}</p>
+            </div>` : ''}
+
+            <!-- Services -->
+            ${services.length ? `
+            <div class="card" style="margin-bottom:24px">
+              <h2 style="font-size:1rem;font-weight:700;margin-bottom:16px">Services Offered</h2>
+              <div style="display:flex;flex-direction:column;gap:12px">
+                ${services.map(s => `
+                  <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:12px;background:var(--color-bg);border-radius:8px">
+                    <div>
+                      <div style="font-weight:600;font-size:0.9rem">${escapeHtml(s.service_name)}</div>
+                      ${s.description ? `<div style="font-size:0.8rem;color:var(--color-text-muted);margin-top:4px">${escapeHtml(s.description)}</div>` : ''}
+                    </div>
+                    ${s.price_note ? `<span class="badge badge-gold">${escapeHtml(s.price_note)}</span>` : ''}
+                  </div>`).join('')}
+              </div>
+            </div>` : ''}
+
+            <!-- Gallery -->
+            ${images.length ? `
+            <div class="card" style="margin-bottom:24px">
+              <h2 style="font-size:1rem;font-weight:700;margin-bottom:16px">Work Gallery</h2>
+              <div class="gallery-grid">
+                ${images.map(img => `<img src="${escapeHtml(img.public_url)}" alt="Work photo" loading="lazy">`).join('')}
+              </div>
+            </div>` : ''}
+
+            <!-- Reviews -->
+            <div id="reviews-section">
+              <h2 style="font-size:1.125rem;font-weight:700;margin-bottom:16px">Reviews</h2>
+              <div id="reviews-list"><div class="spinner" style="margin:0 auto"></div></div>
+              ${user && !isOwner ? renderReviewForm() : ''}
+            </div>
+          </div>
+
+          <!-- Sidebar -->
+          <aside>
+            <div class="provider-sidebar-card">
+              <h3>Coverage Areas</h3>
+              ${areas.length ? areas.map(a => `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:0.875rem"><span>📍</span>${escapeHtml(a.area_name)}</div>`).join('') : '<p style="font-size:0.875rem;color:var(--color-text-muted)">Not specified</p>'}
+            </div>
+            <div class="provider-sidebar-card">
+              <h3>Availability</h3>
+              <p style="font-size:0.875rem;color:var(--color-text)">${escapeHtml(provider.availability_note || 'Contact provider for availability')}</p>
+            </div>
+            ${provider.whatsapp_number ? `
+            <div class="provider-sidebar-card">
+              <h3>WhatsApp</h3>
+              <a href="https://wa.me/${provider.whatsapp_number.replace(/\D/g,'')}" target="_blank" rel="noopener" class="btn btn-primary w-full" style="background:#25D366;border-color:#25D366">
+                💬 Chat on WhatsApp
+              </a>
+            </div>` : ''}
+            <div class="provider-sidebar-card">
+              <h3>Member since</h3>
+              <p style="font-size:0.875rem;color:var(--color-text)">${formatDate(provider.created_at)}</p>
+            </div>
+          </aside>
+        </div>
+      `;
+
+      // Load reviews
+      const reviews = await getProviderReviews(provider.id);
+      const reviewsList = document.getElementById('reviews-list');
+      if (reviews.length) {
+        reviewsList.innerHTML = `<div style="display:flex;flex-direction:column;gap:16px">${reviews.map(r => renderReviewCard(r)).join('')}</div>`;
+      } else {
+        reviewsList.innerHTML = '<p style="color:var(--color-text-muted);font-size:0.875rem">No reviews yet.</p>';
+      }
+
+      // Review form
+      if (user && !isOwner) {
+        initStarPicker();
+        document.getElementById('review-form')?.addEventListener('submit', async e => {
+          e.preventDefault();
+          const rating  = +document.getElementById('review-rating').value;
+          const content = document.getElementById('review-content').value.trim();
+          const alertEl = document.getElementById('review-alert');
+          if (!rating) { showAlert(alertEl, 'Please select a star rating.'); return; }
+          try {
+            await submitReview(user.id, provider.id, rating, content);
+            showAlert(alertEl, 'Review submitted!', 'success');
+            document.getElementById('review-form').reset();
+          } catch (err) {
+            showAlert(alertEl, err.message || 'Failed to submit review.');
+          }
+        });
+      }
+
+      // Message modal
+      document.getElementById('btn-message')?.addEventListener('click', () => {
+        if (!user) { window.location.href = `/account/login.html?next=${encodeURIComponent(window.location.href)}`; return; }
+        document.getElementById('msg-modal-to').textContent = `To: ${provider.business_name || provider.profiles?.full_name}`;
+        document.getElementById('msg-modal').classList.remove('hidden');
+      });
+      document.getElementById('msg-modal-close')?.addEventListener('click', () => document.getElementById('msg-modal').classList.add('hidden'));
+
+      document.getElementById('msg-send-btn')?.addEventListener('click', async () => {
+        const content = document.getElementById('msg-content').value.trim();
+        const alertEl = document.getElementById('msg-modal-alert');
+        if (!content) { showAlert(alertEl, 'Please enter a message.'); return; }
+        const btn = document.getElementById('msg-send-btn');
+        setLoading(btn, true, 'Sending…');
+        try {
+          await startConversation(user.id, provider.user_id, provider.id, content);
+          document.getElementById('msg-modal').classList.add('hidden');
+          window.location.href = '/messages.html';
+        } catch (err) {
+          showAlert(alertEl, err.message || 'Failed to send message.');
+          setLoading(btn, false);
+        }
+      });
+
+      // Report modal
+      document.getElementById('btn-report')?.addEventListener('click', () => {
+        if (!user) { window.location.href = `/account/login.html?next=${encodeURIComponent(window.location.href)}`; return; }
+        document.getElementById('report-modal').classList.remove('hidden');
+      });
+      document.getElementById('report-modal-close')?.addEventListener('click', () => document.getElementById('report-modal').classList.add('hidden'));
+      document.getElementById('report-submit-btn')?.addEventListener('click', async () => {
+        const reason = document.getElementById('report-reason').value.trim();
+        const alertEl = document.getElementById('report-alert');
+        if (!reason) { showAlert(alertEl, 'Please describe the issue.'); return; }
+        try {
+          const { supabase: sb } = await import('/assets/js/supabase-client.js');
+          await sb.from('reports').insert({ reporter_id: user.id, target_type: 'provider', target_id: provider.id, reason });
+          document.getElementById('report-modal').classList.add('hidden');
+        } catch (err) {
+          showAlert(alertEl, err.message || 'Failed to submit report.');
+        }
+      });
+    }
+  </script>
+</body>
+</html>

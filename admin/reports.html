@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Reports – Pedyo Admin</title>
+<link href="/assets/images/logo/pedyo-mark.svg" rel="icon" type="image/svg+xml"/>
+<link href="/assets/css/reset.css" rel="stylesheet"/>
+<link href="/assets/css/tokens.css" rel="stylesheet"/>
+<link href="/assets/css/components.css" rel="stylesheet"/>
+<link href="/assets/css/layout.css" rel="stylesheet"/>
+<link href="/assets/css/pages.css" rel="stylesheet"/>
+</head>
+<body class="page-wrapper">
+<div id="nav-placeholder"></div>
+<div class="dashboard-layout">
+<nav class="sidebar" id="admin-sidebar"></nav>
+<main class="dashboard-main">
+<div class="dashboard-header">
+<h1>User Reports</h1>
+<p>Review and resolve reports submitted by users</p>
+</div>
+<div id="reports-alert"></div>
+<div id="reports-list">
+<div style="text-align:center;padding:40px"><div class="spinner" style="margin:0 auto"></div></div>
+</div>
+</main>
+</div>
+<script type="module">
+    import { renderNav } from '/assets/js/nav-html.js';
+    import { initNav } from '/assets/js/nav.js';
+    import { requireAdmin, getOpenReports, resolveReport } from '/assets/js/admin.js';
+    import { renderAdminSidebar } from '/assets/js/shared-nav.js';
+    import { escapeHtml, formatDate, showAlert, askText } from '/assets/js/ui.js';
+
+    document.getElementById('nav-placeholder').innerHTML = renderNav('');
+    initNav();
+    const adminUser = await requireAdmin();
+    if (!adminUser) throw new Error();
+    document.getElementById('admin-sidebar').innerHTML = renderAdminSidebar('reports');
+
+    const reports = await getOpenReports();
+    const listEl = document.getElementById('reports-list');
+
+    if (!reports.length) {
+      listEl.innerHTML = '<div class="empty-state"><p>No open reports.</p></div>';
+    } else {
+      listEl.innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Reporter</th>
+                <th>Type</th>
+                <th>Reason</th>
+                <th>Date</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${reports.map(r => `
+                <tr id="report-row-${r.id}">
+                  <td>${escapeHtml(r.profiles?.full_name || r.reporter_name || 'Anonymous')}<br><span style="font-size:0.75rem;color:var(--color-text-muted)">${escapeHtml(r.profiles?.email || r.reporter_email || '')}</span></td>
+                  <td><span class="badge badge-blue">${escapeHtml(r.target_type)}</span></td>
+                  <td style="max-width:300px;font-size:0.875rem">${escapeHtml(r.reason)}</td>
+                  <td style="font-size:0.8rem;color:var(--color-text-muted)">${formatDate(r.created_at)}</td>
+                  <td>
+                    <button class="btn btn-primary btn-sm resolve-btn" data-id="${r.id}">Resolve</button>
+                  </td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`;
+
+      listEl.querySelectorAll('.resolve-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const resolution = askText('Resolution notes (optional):');
+          if (resolution === null) return;
+          try {
+            await resolveReport(btn.dataset.id, adminUser.id, (resolution || '').trim() || 'Reviewed by admin');
+            document.getElementById(`report-row-${btn.dataset.id}`)?.remove();
+            showAlert(document.getElementById('reports-alert'), 'Report resolved.', 'success');
+          } catch (err) {
+            showAlert(document.getElementById('reports-alert'), err.message || 'Failed.');
+          }
+        });
+      });
+    }
+  </script>
+</body>
+</html>

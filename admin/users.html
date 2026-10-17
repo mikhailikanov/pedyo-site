@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>User Management – Pedyo Admin</title>
+<link href="/assets/images/logo/pedyo-mark.svg" rel="icon" type="image/svg+xml"/>
+<link href="/assets/css/reset.css" rel="stylesheet"/>
+<link href="/assets/css/tokens.css" rel="stylesheet"/>
+<link href="/assets/css/components.css" rel="stylesheet"/>
+<link href="/assets/css/layout.css" rel="stylesheet"/>
+<link href="/assets/css/pages.css" rel="stylesheet"/>
+</head>
+<body class="page-wrapper">
+<div id="nav-placeholder"></div>
+<div class="dashboard-layout">
+<nav class="sidebar" id="admin-sidebar"></nav>
+<main class="dashboard-main">
+<div class="dashboard-header">
+<h1>User Management</h1>
+<p>Search and manage Pedyo user accounts</p>
+</div>
+<div class="search-bar" style="margin-bottom:24px">
+<svg fill="none" height="18" stroke="var(--color-text-muted)" stroke-width="2" viewbox="0 0 24 24" width="18"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+<input id="user-search" placeholder="Search by name or email…" style="flex:1;border:none;outline:none;font-size:0.9rem" type="text"/>
+<button class="btn btn-primary btn-sm" id="search-btn">Search</button>
+</div>
+<div id="users-alert"></div>
+<div id="users-list">
+<div class="empty-state"><p>Enter a name or email to search for users.</p></div>
+</div>
+</main>
+</div>
+<script type="module">
+    import { renderNav } from '/assets/js/nav-html.js';
+    import { initNav } from '/assets/js/nav.js';
+    import { requireAdmin, searchUsers } from '/assets/js/admin.js';
+    import { renderAdminSidebar } from '/assets/js/shared-nav.js';
+    import { supabase } from '/assets/js/supabase-client.js';
+    import { escapeHtml, formatDate, showAlert, debounce } from '/assets/js/ui.js';
+
+    document.getElementById('nav-placeholder').innerHTML = renderNav('');
+    initNav();
+    const adminUser = await requireAdmin();
+    if (!adminUser) throw new Error();
+    document.getElementById('admin-sidebar').innerHTML = renderAdminSidebar('users');
+
+    async function doSearch() {
+      const query = document.getElementById('user-search').value.trim();
+      if (!query) return;
+      const listEl = document.getElementById('users-list');
+      listEl.innerHTML = '<div style="text-align:center;padding:24px"><div class="spinner" style="margin:0 auto"></div></div>';
+      const users = await searchUsers(query);
+      if (!users.length) {
+        listEl.innerHTML = '<div class="empty-state"><p>No users found.</p></div>';
+        return;
+      }
+      listEl.innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Name</th><th>Email</th><th>Joined</th><th>Admin</th><th>Deletion Requested</th></tr></thead>
+            <tbody>
+              ${users.map(u => `
+                <tr>
+                  <td style="font-weight:600">${escapeHtml(u.full_name || '—')}</td>
+                  <td style="font-size:0.875rem">${escapeHtml(u.email || '—')}</td>
+                  <td style="font-size:0.8rem;color:var(--color-text-muted)">${formatDate(u.created_at)}</td>
+                  <td>${u.is_admin ? '<span class="badge badge-gold">Admin</span>' : '<span class="badge badge-gray">User</span>'}</td>
+                  <td>${u.deletion_requested ? '<span class="badge badge-red">Yes</span>' : '—'}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`;
+    }
+
+    document.getElementById('search-btn').addEventListener('click', doSearch);
+    document.getElementById('user-search').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+  </script>
+</body>
+</html>

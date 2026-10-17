@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Safety Guidelines – Pedyo</title>
+<link href="/assets/images/logo/pedyo-mark.svg" rel="icon" type="image/svg+xml"/>
+<link href="/assets/css/reset.css" rel="stylesheet"/>
+<link href="/assets/css/tokens.css" rel="stylesheet"/>
+<link href="/assets/css/components.css" rel="stylesheet"/>
+<link href="/assets/css/layout.css" rel="stylesheet"/>
+<link href="/assets/css/pages.css" rel="stylesheet"/>
+</head>
+<body class="page-wrapper">
+<div id="nav-placeholder"></div>
+<main class="main-content">
+<div class="page-hero"><h1>Safety Guidelines</h1><p>Staying safe when using Pedyo</p></div>
+<section class="section">
+<div class="container-md" style="line-height:1.8">
+<div class="grid-2" style="gap:24px;margin-bottom:40px">
+<div class="card">
+<h3 style="font-weight:700;margin-bottom:12px;color:var(--green)">👤 For Customers</h3>
+<ul style="display:flex;flex-direction:column;gap:10px;font-size:0.875rem;color:var(--color-text)">
+<li>✓ Check a provider's verification badges before hiring</li>
+<li>✓ Read reviews from previous customers</li>
+<li>✓ Communicate through Pedyo's messaging system to keep a record</li>
+<li>✓ Agree on pricing and scope of work before the job begins</li>
+<li>✓ Meet providers in public or have someone present for first visits</li>
+<li>✓ Report any suspicious behaviour using the Report button</li>
+<li>✓ Leave an honest review after your service is complete</li>
+</ul>
+</div>
+<div class="card">
+<h3 style="font-weight:700;margin-bottom:12px;color:var(--green)">🏢 For Providers</h3>
+<ul style="display:flex;flex-direction:column;gap:10px;font-size:0.875rem;color:var(--color-text)">
+<li>✓ Complete your profile accurately and honestly</li>
+<li>✓ Submit verification documents to build customer trust</li>
+<li>✓ Respond to customer messages promptly and professionally</li>
+<li>✓ Agree on pricing and scope before starting any work</li>
+<li>✓ Do not share personal financial information through the platform</li>
+<li>✓ Report any abusive or suspicious customer behaviour</li>
+<li>✓ Keep your availability and service information up to date</li>
+</ul>
+</div>
+</div>
+<div class="card" style="margin-bottom:24px;border-left:4px solid var(--color-warning)">
+<h3 style="font-weight:700;margin-bottom:12px">⚠️ Warning Signs</h3>
+<p style="font-size:0.875rem;color:var(--color-text-muted);margin-bottom:12px">Be cautious if someone:</p>
+<ul style="display:flex;flex-direction:column;gap:8px;font-size:0.875rem;color:var(--color-text)">
+<li>• Asks for large upfront payments before any work is done</li>
+<li>• Refuses to communicate through Pedyo's messaging system</li>
+<li>• Pressures you to make quick decisions</li>
+<li>• Provides vague or inconsistent information about their services</li>
+<li>• Asks for personal financial information</li>
+</ul>
+</div>
+<div class="card" style="background:linear-gradient(135deg,var(--green) 0%,var(--green-dark) 100%);color:#fff;border:none">
+<h3 style="font-weight:700;margin-bottom:12px">🚩 How to Report</h3>
+<p style="font-size:0.875rem;opacity:0.9;margin-bottom:16px">
+            If you encounter suspicious behaviour, inappropriate content or a safety concern on Pedyo,
+            use the Report button on any provider profile, review or conversation.
+            Our team reviews all reports and takes appropriate action.
+          </p>
+<a class="btn btn-accent btn-sm" href="/contact.html">Contact Support</a>
+</div>
+</div>
+</section>
+</main>
+<div id="footer-placeholder"></div>
+<script type="module">
+    import { renderNav, renderFooter } from '/assets/js/nav-html.js';
+    import { initNav } from '/assets/js/nav.js';
+    document.getElementById('nav-placeholder').innerHTML = renderNav('');
+    document.getElementById('footer-placeholder').innerHTML = renderFooter();
+    initNav();
+  </script>
+</body>
+</html>

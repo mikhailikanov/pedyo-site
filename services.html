@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Services – Pedyo</title>
+<meta content="Browse all service categories on Pedyo — from plumbing and electrical to solar, transport and more." name="description"/>
+<link href="/assets/images/logo/pedyo-mark.svg" rel="icon" type="image/svg+xml"/>
+<link href="/assets/css/reset.css" rel="stylesheet"/>
+<link href="/assets/css/tokens.css" rel="stylesheet"/>
+<link href="/assets/css/components.css" rel="stylesheet"/>
+<link href="/assets/css/layout.css" rel="stylesheet"/>
+<link href="/assets/css/pages.css" rel="stylesheet"/>
+</head>
+<body class="page-wrapper">
+<div id="nav-placeholder"></div>
+<main class="main-content">
+<div class="page-hero">
+<h1>Our Services</h1>
+<p>12 categories covering the services you need most in Harare and Chitungwiza</p>
+</div>
+<section class="section">
+<div class="container">
+<div class="grid-auto" id="categories-grid">
+<div style="text-align:center;padding:40px;color:var(--color-text-muted)">Loading categories…</div>
+</div>
+</div>
+</section>
+</main>
+<div id="footer-placeholder"></div>
+<script type="module">
+    import { renderNav, renderFooter } from '/assets/js/nav-html.js';
+    import { initNav } from '/assets/js/nav.js';
+    import { loadCategories, getCategoryIcon } from '/assets/js/categories.js';
+    import { escapeHtml } from '/assets/js/ui.js';
+    import { supabase } from '/assets/js/supabase-client.js';
+
+    document.getElementById('nav-placeholder').innerHTML = renderNav('services');
+    document.getElementById('footer-placeholder').innerHTML = renderFooter();
+    initNav();
+
+    const cats = await loadCategories();
+    const grid = document.getElementById('categories-grid');
+
+    if (!cats.length) {
+      grid.innerHTML = '<p class="text-muted text-center">No categories available yet.</p>';
+    } else {
+      // One request, tallied locally. Counting provider_services rows
+      // would report services, not businesses.
+      const { data: approved } = await supabase
+        .from('provider_profiles')
+        .select('primary_category')
+        .eq('status', 'approved');
+      const counts = {};
+      (approved || []).forEach(r => {
+        counts[r.primary_category] = (counts[r.primary_category] || 0) + 1;
+      });
+
+      grid.innerHTML = cats.map(cat => {
+        const n = counts[cat.name] || 0;
+        return `
+        <a href="/search.html?category=${encodeURIComponent(cat.name)}" class="category-card" style="text-decoration:none">
+          <div class="category-icon">${getCategoryIcon(cat.name)}</div>
+          <h3>${escapeHtml(cat.name)}</h3>
+          <p>${n} provider${n !== 1 ? 's' : ''}</p>
+        </a>`;
+      }).join('');
+    }
+  </script>
+</body>
+</html>

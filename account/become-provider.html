@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Become a Provider – Pedyo</title>
+<link href="/assets/images/logo/pedyo-mark.svg" rel="icon" type="image/svg+xml"/>
+<link href="/assets/css/reset.css" rel="stylesheet"/>
+<link href="/assets/css/tokens.css" rel="stylesheet"/>
+<link href="/assets/css/components.css" rel="stylesheet"/>
+<link href="/assets/css/layout.css" rel="stylesheet"/>
+<link href="/assets/css/pages.css" rel="stylesheet"/>
+</head>
+<body class="page-wrapper">
+<div id="nav-placeholder"></div>
+<main class="main-content">
+<div class="page-hero">
+<h1>Become a Provider</h1>
+<p>List your services on Pedyo and connect with customers in Harare and Chitungwiza.</p>
+</div>
+<section class="section">
+<div class="container-sm">
+<!-- Benefits -->
+<div class="grid-3" style="margin-bottom:48px">
+<div class="card" style="text-align:center">
+<div style="font-size:2rem;margin-bottom:12px">🆓</div>
+<h3 style="font-weight:700;margin-bottom:8px">Free to join</h3>
+<p style="font-size:0.875rem;color:var(--color-text-muted)">No subscription fees. Create your profile at no cost.</p>
+</div>
+<div class="card" style="text-align:center">
+<div style="font-size:2rem;margin-bottom:12px">📨</div>
+<h3 style="font-weight:700;margin-bottom:8px">Direct messages</h3>
+<p style="font-size:0.875rem;color:var(--color-text-muted)">Customers contact you directly through Pedyo messaging.</p>
+</div>
+<div class="card" style="text-align:center">
+<div style="font-size:2rem;margin-bottom:12px">✅</div>
+<h3 style="font-weight:700;margin-bottom:8px">Get verified</h3>
+<p style="font-size:0.875rem;color:var(--color-text-muted)">Build trust with honest verification badges.</p>
+</div>
+</div>
+<div class="card" id="form-card">
+<h2 style="font-size:1.25rem;font-weight:700;margin-bottom:8px">Create your provider profile</h2>
+<p style="font-size:0.875rem;color:var(--color-text-muted);margin-bottom:24px">You'll need a Pedyo account first. One account supports both customer and provider roles.</p>
+<div id="form-alert"></div>
+<div id="auth-check">
+<div style="text-align:center;padding:32px">
+<div class="spinner" style="margin:0 auto 16px"></div>
+<p style="color:var(--color-text-muted)">Checking account…</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<div id="footer-placeholder"></div>
+<script type="module">
+    import { renderNav, renderFooter } from '/assets/js/nav-html.js';
+    import { initNav } from '/assets/js/nav.js';
+    import { supabase } from '/assets/js/supabase-client.js';
+    import { loadCategories } from '/assets/js/categories.js';
+    import { createProviderProfile, addServices, saveServiceAreas, initServiceList, readServiceRows } from '/assets/js/providers.js';
+    import { showAlert, setLoading } from '/assets/js/ui.js';
+
+    document.getElementById('nav-placeholder').innerHTML = renderNav('');
+    document.getElementById('footer-placeholder').innerHTML = renderFooter();
+    initNav();
+
+    const { data: { user } } = await supabase.auth.getUser();
+    const authCheck = document.getElementById('auth-check');
+
+    if (!user) {
+      authCheck.innerHTML = `
+        <div style="text-align:center;padding:24px">
+          <p style="margin-bottom:16px;color:var(--color-text-muted)">You need a Pedyo account to become a provider.</p>
+          <div style="display:flex;gap:12px;justify-content:center">
+            <a href="/account/register.html?next=/account/become-provider.html" class="btn btn-primary">Create Account</a>
+            <a href="/account/login.html?next=/account/become-provider.html" class="btn btn-outline">Sign In</a>
+          </div>
+        </div>`;
+    } else {
+      const cats = await loadCategories();
+      authCheck.innerHTML = `
+        <form id="provider-form" style="display:flex;flex-direction:column;gap:20px">
+          <div class="form-group">
+            <label class="form-label" for="provider-type">Provider type</label>
+            <select class="form-select" id="provider-type">
+              <option value="individual">Individual</option>
+              <option value="business">Business</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="business-name">Business / display name</label>
+            <input type="text" class="form-input" id="business-name" placeholder="Your name or business name" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="description">Description</label>
+            <textarea class="form-textarea" id="description" rows="4" placeholder="Describe your services, experience and what makes you stand out…" required></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="category">Primary service category</label>
+            <select class="form-select" id="category" required>
+              <option value="">Select a category</option>
+              ${cats.map(c => `<option value="${c.name}">${c.name}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Services offered</label>
+            <div id="service-list" class="service-list"></div>
+            <button type="button" class="btn btn-ghost btn-sm" id="service-add-btn">+ Add another service</button>
+            <span class="form-hint">Customers browse by these, so list what you actually do.</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="areas">Coverage areas</label>
+            <input type="text" class="form-input" id="areas" placeholder="e.g. Harare CBD, Chitungwiza, Borrowdale">
+            <span class="form-hint">Comma-separated list of areas you serve</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="whatsapp">WhatsApp number (optional)</label>
+            <input type="tel" class="form-input" id="whatsapp" placeholder="+263 7X XXX XXXX">
+            <span class="form-hint">Customers can contact you directly via WhatsApp</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="availability">Availability note (optional)</label>
+            <input type="text" class="form-input" id="availability" placeholder="e.g. Mon–Fri 8am–5pm, weekends by arrangement">
+          </div>
+          <button type="submit" class="btn btn-primary" id="create-btn">Create Provider Profile</button>
+        </form>`;
+
+      const serviceList = document.getElementById('service-list');
+      initServiceList(serviceList, [], document.getElementById('service-add-btn'));
+
+      document.getElementById('provider-form').addEventListener('submit', async e => {
+        e.preventDefault();
+        const btn = document.getElementById('create-btn');
+        const alertEl = document.getElementById('form-alert');
+        setLoading(btn, true, 'Creating…');
+        try {
+          const category = document.getElementById('category').value;
+          const profile = await createProviderProfile(user.id, {
+            provider_type: document.getElementById('provider-type').value,
+            business_name: document.getElementById('business-name').value.trim(),
+            description: document.getElementById('description').value.trim(),
+            primary_category: category,
+            whatsapp_number: document.getElementById('whatsapp').value.trim(),
+            availability_note: document.getElementById('availability').value.trim()
+          });
+          await addServices(profile.id, readServiceRows(serviceList), category);
+          await saveServiceAreas(profile.id,
+            document.getElementById('areas').value.split(',').map(a => a.trim()).filter(Boolean));
+          showAlert(alertEl, 'Profile created! Redirecting to your provider dashboard…', 'success');
+          setTimeout(() => window.location.href = '/providers.html', 2000);
+        } catch (err) {
+          showAlert(alertEl, err.message || 'Failed to create profile.');
+          setLoading(btn, false, 'Create Provider Profile');
+        }
+      });
+    }
+  </script>
+</body>
+</html>

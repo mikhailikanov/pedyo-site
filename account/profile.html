@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>My Profile – Pedyo</title>
+<link href="/assets/images/logo/pedyo-mark.svg" rel="icon" type="image/svg+xml"/>
+<link href="/assets/css/reset.css" rel="stylesheet"/>
+<link href="/assets/css/tokens.css" rel="stylesheet"/>
+<link href="/assets/css/components.css" rel="stylesheet"/>
+<link href="/assets/css/layout.css" rel="stylesheet"/>
+<link href="/assets/css/pages.css" rel="stylesheet"/>
+</head>
+<body class="page-wrapper">
+<div id="nav-placeholder"></div>
+<main class="main-content">
+<div class="section-sm">
+<div class="container-sm">
+<div class="breadcrumb"><a href="/">Home</a><span class="breadcrumb-sep">›</span><span>My Profile</span></div>
+<h1 style="font-size:var(--font-size-2xl);font-weight:800;margin-bottom:32px">My Profile</h1>
+<div class="card" style="margin-bottom:24px">
+<div style="display:flex;align-items:center;gap:20px;margin-bottom:24px">
+<div class="avatar avatar-xl" id="avatar-display"></div>
+<div>
+<h2 id="profile-name" style="font-size:1.25rem;font-weight:700">Loading…</h2>
+<p id="profile-email" style="color:var(--color-text-muted);font-size:0.875rem"></p>
+<label class="btn btn-outline btn-sm" style="margin-top:8px;cursor:pointer">
+                Change photo
+                <input accept="image/*" id="avatar-input" style="display:none" type="file"/>
+</label>
+</div>
+</div>
+<div id="profile-alert"></div>
+<form id="profile-form" style="display:flex;flex-direction:column;gap:16px">
+<div class="form-group">
+<label class="form-label" for="full-name">Full name</label>
+<input class="form-input" id="full-name" placeholder="Your full name" type="text"/>
+</div>
+<div class="form-group">
+<label class="form-label" for="phone">Phone number</label>
+<input class="form-input" id="phone" placeholder="+263 7X XXX XXXX" type="tel"/>
+</div>
+<div class="form-group">
+<label class="form-label" for="bio">Bio</label>
+<textarea class="form-textarea" id="bio" placeholder="A short bio about yourself…" rows="3"></textarea>
+</div>
+<button class="btn btn-primary" id="save-btn" type="submit">Save Changes</button>
+</form>
+</div>
+<div class="card" style="border-color:var(--color-danger)">
+<h3 style="font-weight:700;margin-bottom:8px;color:var(--color-danger)">Delete Account</h3>
+<p style="font-size:0.875rem;color:var(--color-text-muted);margin-bottom:16px">Request deletion of your Pedyo account and all associated data.</p>
+<div id="delete-alert"></div>
+<button class="btn btn-danger btn-sm" id="delete-btn">Request Account Deletion</button>
+</div>
+</div>
+</div>
+</main>
+<div id="footer-placeholder"></div>
+<script type="module">
+    import { renderNav, renderFooter } from '/assets/js/nav-html.js';
+    import { initNav } from '/assets/js/nav.js';
+    import { supabase } from '/assets/js/supabase-client.js';
+    import { getProfile, updateProfile, requestAccountDeletion } from '/assets/js/profiles.js';
+    import { uploadAvatar } from '/assets/js/storage.js';
+    import { showAlert, setLoading, avatarInitials } from '/assets/js/ui.js';
+    import { requireAuth } from '/assets/js/auth.js';
+
+    document.getElementById('nav-placeholder').innerHTML = renderNav('');
+    document.getElementById('footer-placeholder').innerHTML = renderFooter();
+    initNav();
+
+    if (!await requireAuth('/account/profile.html')) throw new Error('Not authenticated');
+
+    const { data: { user } } = await supabase.auth.getUser();
+    const profile = await getProfile(user.id);
+
+    // Populate form
+    document.getElementById('profile-email').textContent = user.email;
+    if (profile) {
+      document.getElementById('full-name').value = profile.full_name || '';
+      document.getElementById('phone').value = profile.phone || '';
+      document.getElementById('bio').value = profile.bio || '';
+      document.getElementById('profile-name').textContent = profile.full_name || user.email;
+    }
+
+    // Avatar
+    const avatarEl = document.getElementById('avatar-display');
+    if (profile?.avatar_url) {
+      avatarEl.innerHTML = `<img src="${profile.avatar_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" alt="Avatar">`;
+    } else {
+      avatarEl.textContent = avatarInitials(profile?.full_name || user.email);
+    }
+
+    // Avatar upload
+    document.getElementById('avatar-input').addEventListener('change', async e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const alertEl = document.getElementById('profile-alert');
+      try {
+        const url = await uploadAvatar(user.id, file);
+        await updateProfile(user.id, { avatar_url: url });
+        avatarEl.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" alt="Avatar">`;
+        showAlert(alertEl, 'Photo updated!', 'success');
+      } catch (err) {
+        showAlert(alertEl, err.message || 'Failed to upload photo.');
+      }
+    });
+
+    // Save profile
+    document.getElementById('profile-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const btn = document.getElementById('save-btn');
+      const alertEl = document.getElementById('profile-alert');
+      setLoading(btn, true, 'Saving…');
+      try {
+        const updated = await updateProfile(user.id, {
+          full_name: document.getElementById('full-name').value.trim(),
+          phone: document.getElementById('phone').value.trim(),
+          bio: document.getElementById('bio').value.trim()
+        });
+        document.getElementById('profile-name').textContent = updated.full_name || user.email;
+        showAlert(alertEl, 'Profile saved!', 'success');
+      } catch (err) {
+        showAlert(alertEl, err.message || 'Failed to save profile.');
+      } finally {
+        setLoading(btn, false, 'Save Changes');
+      }
+    });
+
+    // Delete account
+    document.getElementById('delete-btn').addEventListener('click', async () => {
+      if (!confirm('Are you sure you want to request account deletion? This cannot be undone.')) return;
+      const alertEl = document.getElementById('delete-alert');
+      try {
+        await requestAccountDeletion(user.id);
+        showAlert(alertEl, 'Deletion request submitted. We will process it within 30 days.', 'success');
+      } catch (err) {
+        showAlert(alertEl, err.message || 'Failed to submit deletion request.');
+      }
+    });
+  </script>
+</body>
+</html>

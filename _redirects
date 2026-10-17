@@ -1,0 +1,5 @@
+# Pedyo — Cloudflare Pages redirects
+/home    /        301
+/login   /account/login.html    301
+/register /account/register.html 301
+/admin   /admin/index.html      301

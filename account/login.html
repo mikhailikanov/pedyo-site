@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Sign In – Pedyo</title>
+<link href="/assets/images/logo/pedyo-mark.svg" rel="icon" type="image/svg+xml"/>
+<link href="/assets/css/reset.css" rel="stylesheet"/>
+<link href="/assets/css/tokens.css" rel="stylesheet"/>
+<link href="/assets/css/components.css" rel="stylesheet"/>
+<link href="/assets/css/layout.css" rel="stylesheet"/>
+<link href="/assets/css/pages.css" rel="stylesheet"/>
+</head>
+<body>
+<div class="auth-page">
+<div class="auth-card">
+<div class="auth-logo">
+<a href="/" class="logo"><img alt="" class="logo-mark" src="/assets/images/logo/pedyo-mark.svg"/><span class="logo-word">Pedyo</span></a>
+</div>
+<h1 class="auth-title">Welcome back</h1>
+<p class="auth-subtitle">Sign in to your Pedyo account</p>
+<div id="auth-alert"></div>
+<form class="auth-form" id="login-form">
+<div class="form-group">
+<label class="form-label" for="email">Email address</label>
+<input autocomplete="email" class="form-input" id="email" placeholder="you@example.com" required="" type="email"/>
+</div>
+<div class="form-group">
+<label class="form-label" for="password">
+            Password
+            <a href="/account/forgot-password.html" style="float:right;font-weight:400;color:var(--green);font-size:0.8rem">Forgot password?</a>
+</label>
+<input autocomplete="current-password" class="form-input" id="password" placeholder="••••••••" required="" type="password"/>
+</div>
+<button class="btn btn-primary w-full" id="login-btn" type="submit">Sign In</button>
+</form>
+<p class="auth-footer">Don't have an account? <a href="/account/register.html">Create one free</a></p>
+</div>
+</div>
+<script type="module">
+    import { signIn, promptPushNotifications } from '/assets/js/auth.js';
+    import { showAlert, setLoading, getQueryParam } from '/assets/js/ui.js';
+
+    const next = getQueryParam('next') || '/';
+
+    document.getElementById('login-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const btn = document.getElementById('login-btn');
+      const alertEl = document.getElementById('auth-alert');
+      setLoading(btn, true, 'Signing in…');
+      try {
+        await signIn(
+          document.getElementById('email').value.trim(),
+          document.getElementById('password').value
+        );
+        await promptPushNotifications();
+        window.location.href = next;
+      } catch (err) {
+        showAlert(alertEl, err.message || 'Sign in failed. Please check your credentials.');
+        setLoading(btn, false, 'Sign In');
+      }
+    });
+  </script>
+</body>
+</html>

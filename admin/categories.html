@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Category Management – Pedyo Admin</title>
+<link href="/assets/images/logo/pedyo-mark.svg" rel="icon" type="image/svg+xml"/>
+<link href="/assets/css/reset.css" rel="stylesheet"/>
+<link href="/assets/css/tokens.css" rel="stylesheet"/>
+<link href="/assets/css/components.css" rel="stylesheet"/>
+<link href="/assets/css/layout.css" rel="stylesheet"/>
+<link href="/assets/css/pages.css" rel="stylesheet"/>
+</head>
+<body class="page-wrapper">
+<div id="nav-placeholder"></div>
+<div class="dashboard-layout">
+<nav class="sidebar" id="admin-sidebar"></nav>
+<main class="dashboard-main">
+<div class="dashboard-header">
+<h1>Category Management</h1>
+<p>Add, rename, reorder and disable service categories without editing code</p>
+</div>
+<div id="cat-alert"></div>
+<!-- Add category -->
+<div class="card" style="margin-bottom:24px">
+<h3 style="font-weight:700;margin-bottom:16px">Add New Category</h3>
+<div style="display:flex;gap:12px;align-items:flex-end">
+<div class="form-group" style="flex:1">
+<label class="form-label" for="new-cat-name">Category name</label>
+<input class="form-input" id="new-cat-name" placeholder="e.g. Landscaping" type="text"/>
+</div>
+<button class="btn btn-primary" id="add-cat-btn">Add Category</button>
+</div>
+</div>
+<!-- Categories list -->
+<div class="card">
+<h3 style="font-weight:700;margin-bottom:16px">All Categories</h3>
+<div id="categories-list">
+<div style="text-align:center;padding:24px"><div class="spinner" style="margin:0 auto"></div></div>
+</div>
+</div>
+</main>
+</div>
+<script type="module">
+    import { renderNav } from '/assets/js/nav-html.js';
+    import { initNav } from '/assets/js/nav.js';
+    import { requireAdmin, getCategories, createCategory, updateCategory, toggleCategory } from '/assets/js/admin.js';
+    import { renderAdminSidebar } from '/assets/js/shared-nav.js';
+    import { escapeHtml, showAlert } from '/assets/js/ui.js';
+
+    document.getElementById('nav-placeholder').innerHTML = renderNav('');
+    initNav();
+    const adminUser = await requireAdmin();
+    if (!adminUser) throw new Error();
+    document.getElementById('admin-sidebar').innerHTML = renderAdminSidebar('categories');
+
+    async function loadCategories() {
+      const cats = await getCategories();
+      const listEl = document.getElementById('categories-list');
+      if (!cats.length) { listEl.innerHTML = '<p class="text-muted">No categories yet.</p>'; return; }
+
+      listEl.innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Order</th><th>Name</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody>
+              ${cats.map(c => `
+                <tr id="cat-row-${c.id}">
+                  <td style="color:var(--color-text-muted);font-size:0.875rem">${c.sort_order}</td>
+                  <td>
+                    <input type="text" class="form-input cat-name-input" data-id="${c.id}"
+                           value="${escapeHtml(c.name)}" style="max-width:240px">
+                  </td>
+                  <td>${c.is_active ? '<span class="badge badge-green">Active</span>' : '<span class="badge badge-gray">Disabled</span>'}</td>
+                  <td style="display:flex;gap:8px;flex-wrap:wrap">
+                    <button class="btn btn-outline btn-sm save-cat-btn" data-id="${c.id}">Save</button>
+                    <button class="btn btn-sm ${c.is_active ? 'btn-danger' : 'btn-primary'} toggle-cat-btn"
+                            data-id="${c.id}" data-active="${c.is_active}">
+                      ${c.is_active ? 'Disable' : 'Enable'}
+                    </button>
+                  </td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`;
+
+      // Save name
+      listEl.querySelectorAll('.save-cat-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const input = listEl.querySelector(`.cat-name-input[data-id="${btn.dataset.id}"]`);
+          const name = input?.value.trim();
+          if (!name) return;
+          try {
+            await updateCategory(btn.dataset.id, { name }, adminUser.id);
+            showAlert(document.getElementById('cat-alert'), 'Category updated.', 'success');
+          } catch (err) { showAlert(document.getElementById('cat-alert'), err.message || 'Failed.'); }
+        });
+      });
+
+      // Toggle active
+      listEl.querySelectorAll('.toggle-cat-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const isActive = btn.dataset.active === 'true';
+          try {
+            await toggleCategory(btn.dataset.id, !isActive, adminUser.id);
+            showAlert(document.getElementById('cat-alert'), `Category ${!isActive ? 'enabled' : 'disabled'}.`, 'success');
+            loadCategories();
+          } catch (err) { showAlert(document.getElementById('cat-alert'), err.message || 'Failed.'); }
+        });
+      });
+    }
+
+    // Add category
+    document.getElementById('add-cat-btn').addEventListener('click', async () => {
+      const name = document.getElementById('new-cat-name').value.trim();
+      if (!name) { showAlert(document.getElementById('cat-alert'), 'Please enter a category name.'); return; }
+      try {
+        await createCategory(name, adminUser.id);
+        document.getElementById('new-cat-name').value = '';
+        showAlert(document.getElementById('cat-alert'), 'Category added!', 'success');
+        loadCategories();
+      } catch (err) { showAlert(document.getElementById('cat-alert'), err.message || 'Failed.'); }
+    });
+
+    loadCategories();
+  </script>
+</body>
+</html>

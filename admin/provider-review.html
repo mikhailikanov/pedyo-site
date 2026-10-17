@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Provider Review – Pedyo Admin</title>
+<link href="/assets/images/logo/pedyo-mark.svg" rel="icon" type="image/svg+xml"/>
+<link href="/assets/css/reset.css" rel="stylesheet"/>
+<link href="/assets/css/tokens.css" rel="stylesheet"/>
+<link href="/assets/css/components.css" rel="stylesheet"/>
+<link href="/assets/css/layout.css" rel="stylesheet"/>
+<link href="/assets/css/pages.css" rel="stylesheet"/>
+</head>
+<body class="page-wrapper">
+<div id="nav-placeholder"></div>
+<div class="dashboard-layout">
+<nav class="sidebar" id="admin-sidebar"></nav>
+<main class="dashboard-main">
+<div class="breadcrumb"><a href="/admin/providers.html">← Provider Queue</a></div>
+<div id="review-content">
+<div style="text-align:center;padding:40px"><div class="spinner" style="margin:0 auto"></div></div>
+</div>
+</main>
+</div>
+<script type="module">
+    import { renderNav } from '/assets/js/nav-html.js';
+    import { initNav } from '/assets/js/nav.js';
+    import { requireAdmin, approveProvider, rejectProvider, suspendProvider, setVerificationBadge } from '/assets/js/admin.js';
+    import { renderAdminSidebar } from '/assets/js/shared-nav.js';
+    import { supabase } from '/assets/js/supabase-client.js';
+    import { escapeHtml, formatDate, showAlert, setLoading, getQueryParam, askText } from '/assets/js/ui.js';
+
+    document.getElementById('nav-placeholder').innerHTML = renderNav('');
+    initNav();
+    const adminUser = await requireAdmin();
+    if (!adminUser) throw new Error();
+    document.getElementById('admin-sidebar').innerHTML = renderAdminSidebar('providers');
+
+    const id = getQueryParam('id');
+    if (!id) { document.getElementById('review-content').innerHTML = '<p>No provider ID specified.</p>'; }
+    else { await loadProvider(id); }
+
+    async function loadProvider(id) {
+      const { data: p, error } = await supabase
+        .from('provider_profiles')
+        .select('*, profiles(full_name, email), provider_services(*), service_areas(*), provider_images(*)')
+        .eq('id', id).single();
+      if (error || !p) { document.getElementById('review-content').innerHTML = '<p>Provider not found.</p>'; return; }
+
+      const BADGES = [
+        { key: 'email_confirmed',        label: 'Email confirmed' },
+        { key: 'contact_confirmed',      label: 'Contact confirmed' },
+        { key: 'identity_reviewed',      label: 'Identity reviewed' },
+        { key: 'business_docs_reviewed', label: 'Business docs reviewed' },
+        { key: 'founding_provider',      label: 'Founding provider' }
+      ];
+
+      document.getElementById('review-content').innerHTML = `
+        <div id="review-alert" style="margin-bottom:16px"></div>
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:24px">
+          <div>
+            <h1 style="font-size:1.5rem;font-weight:800">${escapeHtml(p.business_name)}</h1>
+            <p style="color:var(--color-text-muted);font-size:0.875rem">${escapeHtml(p.profiles?.full_name||'')} · ${escapeHtml(p.profiles?.email||'')} · ${p.provider_type}</p>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            ${p.status !== 'approved' ? `<button class="btn btn-primary" id="approve-btn">Approve</button>` : ''}
+            ${p.status !== 'rejected' ? `<button class="btn btn-danger" id="reject-btn">Reject</button>` : ''}
+            ${p.status === 'approved' ? `<button class="btn btn-danger" id="suspend-btn">Suspend</button>` : ''}
+          </div>
+        </div>
+
+        <div class="grid-2" style="gap:24px;margin-bottom:24px">
+          <div class="card">
+            <h3 style="font-weight:700;margin-bottom:12px">Profile Details</h3>
+            <div style="display:flex;flex-direction:column;gap:8px;font-size:0.875rem">
+              <div><span style="color:var(--color-text-muted)">Status:</span> <span class="badge badge-${p.status==='approved'?'green':p.status==='pending'?'gold':'red'}">${p.status}</span></div>
+              <div><span style="color:var(--color-text-muted)">Type:</span> ${p.provider_type}</div>
+              <div><span style="color:var(--color-text-muted)">Submitted:</span> ${formatDate(p.created_at)}</div>
+              <div><span style="color:var(--color-text-muted)">WhatsApp:</span> ${escapeHtml(p.whatsapp_number||'Not provided')}</div>
+            </div>
+          </div>
+          <div class="card">
+            <h3 style="font-weight:700;margin-bottom:12px">Verification Badges</h3>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              ${BADGES.map(b => `
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:0.875rem">
+                  <input type="checkbox" class="badge-toggle" data-key="${b.key}" ${p[b.key] ? 'checked' : ''}>
+                  ${b.label}
+                </label>`).join('')}
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:24px">
+          <h3 style="font-weight:700;margin-bottom:12px">Description</h3>
+          <p style="font-size:0.875rem;line-height:1.7">${escapeHtml(p.description||'No description')}</p>
+        </div>
+
+        ${p.provider_services?.length ? `
+        <div class="card" style="margin-bottom:24px">
+          <h3 style="font-weight:700;margin-bottom:12px">Services (${p.provider_services.length})</h3>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            ${p.provider_services.map(s => `<span class="badge badge-green">${escapeHtml(s.service_name)}</span>`).join('')}
+          </div>
+        </div>` : ''}
+
+        ${p.provider_images?.length ? `
+        <div class="card" style="margin-bottom:24px">
+          <h3 style="font-weight:700;margin-bottom:12px">Images (${p.provider_images.length})</h3>
+          <div class="gallery-grid">
+            ${p.provider_images.map(img => `
+              <div style="position:relative">
+                <img src="${escapeHtml(img.public_url)}" alt="Provider image" loading="lazy">
+                <span class="badge badge-${img.moderation_status==='approved'?'green':img.moderation_status==='pending'?'gold':'red'}" style="position:absolute;top:4px;left:4px">${img.moderation_status}</span>
+              </div>`).join('')}
+          </div>
+        </div>` : ''}
+      `;
+
+      // Badge toggles
+      document.querySelectorAll('.badge-toggle').forEach(cb => {
+        cb.addEventListener('change', async () => {
+          try {
+            await setVerificationBadge(id, cb.dataset.key, cb.checked, adminUser.id);
+            showAlert(document.getElementById('review-alert'), `Badge "${cb.dataset.key}" ${cb.checked ? 'granted' : 'removed'}.`, 'success');
+          } catch (err) {
+            showAlert(document.getElementById('review-alert'), err.message || 'Failed to update badge.');
+            cb.checked = !cb.checked;
+          }
+        });
+      });
+
+      document.getElementById('approve-btn')?.addEventListener('click', async () => {
+        try { await approveProvider(id, adminUser.id); showAlert(document.getElementById('review-alert'), 'Provider approved!', 'success'); setTimeout(() => location.reload(), 1500); }
+        catch (err) { showAlert(document.getElementById('review-alert'), err.message || 'Failed.'); }
+      });
+
+      document.getElementById('reject-btn')?.addEventListener('click', async () => {
+        const reason = askText('Reason for rejection:');
+        if (reason === null) return;
+        try { await rejectProvider(id, adminUser.id, (reason || '').trim() || 'Rejected by admin'); showAlert(document.getElementById('review-alert'), 'Provider rejected.', 'success'); setTimeout(() => location.reload(), 1500); }
+        catch (err) { showAlert(document.getElementById('review-alert'), err.message || 'Failed.'); }
+      });
+
+      document.getElementById('suspend-btn')?.addEventListener('click', async () => {
+        const reason = askText('Reason for suspension:');
+        if (reason === null) return;
+        try { await suspendProvider(id, adminUser.id, (reason || '').trim() || 'Suspended by admin'); showAlert(document.getElementById('review-alert'), 'Provider suspended.', 'success'); setTimeout(() => location.reload(), 1500); }
+        catch (err) { showAlert(document.getElementById('review-alert'), err.message || 'Failed.'); }
+      });
+    }
+  </script>
+</body>
+</html>

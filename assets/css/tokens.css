@@ -1,0 +1,97 @@
+/* Pedyo Design Tokens */
+:root {
+  /* Brand Colours */
+  --green:        #157A5A;
+  --green-dark:   #0D5C44;
+  --green-deep:   #083F30;
+  --green-mid:    #1E9B70;
+  --green-tint:   #E8F5F0;
+  --green-tint-2: #F2F9F6;
+  --gold:         #F4B942;
+  --gold-deep:    #B87A12;
+  --charcoal:     #17252A;
+  --bg:           #F7F9F9;
+  --info-blue:    #2878B5;
+
+  /* Neutral ramp (green undertone, matches --charcoal) */
+  --n-50:  #F7F9F9;
+  --n-100: #EEF2F3;
+  --n-200: #DFE6E8;
+  --n-300: #C4D0D4;
+  --n-400: #93A6AD;
+  --n-500: #6B8189;
+  --n-600: #4B6068;
+  --n-700: #324850;
+  --n-800: #21343A;
+  --n-900: #17252A;
+
+  /* Semantic aliases */
+  --color-primary:      var(--green);
+  --color-primary-dark: var(--green-dark);
+  --color-accent:       var(--gold);
+  --color-text:         var(--charcoal);
+  --color-text-muted:   var(--n-600);
+  --color-text-soft:    var(--n-500);
+  --color-bg:           var(--bg);
+  --color-bg-alt:       #FFFFFF;
+  --color-surface:      #FFFFFF;
+  --color-surface-2:    var(--green-tint-2);
+  --color-border:       var(--n-200);
+  --color-border-strong:var(--n-300);
+  --color-danger:       #DC2626;
+  --color-success:      #16A34A;
+  --color-warning:      #D97706;
+  --color-info:         var(--info-blue);
+
+  /* Typography */
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-size-xs:   0.75rem;
+  --font-size-sm:   0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg:   1.125rem;
+  --font-size-xl:   1.25rem;
+  --font-size-2xl:  1.5rem;
+  --font-size-3xl:  1.875rem;
+  --font-size-4xl:  2.25rem;
+  --font-size-5xl:  clamp(2.1rem, 4.2vw, 3.15rem);
+  --leading-tight:  1.14;
+  --leading-body:   1.65;
+  --tracking-display: -0.028em;
+  --tracking-caps:    0.07em;
+
+  /* Spacing */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+
+  /* Radii */
+  --radius-sm:   0.375rem;
+  --radius-md:   0.5rem;
+  --radius-lg:   0.875rem;
+  --radius-xl:   1.125rem;
+  --radius-2xl:  1.5rem;
+  --radius-full: 9999px;
+
+  /* Shadows — green-tinted so they sit on the brand background */
+  --shadow-xs: 0 1px 2px rgba(8,63,48,0.06);
+  --shadow-sm: 0 1px 2px rgba(8,63,48,0.05), 0 2px 6px rgba(8,63,48,0.05);
+  --shadow-md: 0 4px 10px rgba(8,63,48,0.07), 0 12px 28px rgba(8,63,48,0.08);
+  --shadow-lg: 0 12px 28px rgba(8,63,48,0.12), 0 32px 64px rgba(8,63,48,0.12);
+  --shadow-glow: 0 8px 24px rgba(21,122,90,0.28);
+
+  /* Gradients */
+  --grad-brand: linear-gradient(135deg, #1E9B70 0%, #0D5C44 58%, #083F30 100%);
+  --grad-gold:  linear-gradient(135deg, #FFD37A 0%, #F4B942 100%);
+
+  --ring: 0 0 0 3px rgba(21,122,90,0.18);
+  --transition: 0.2s cubic-bezier(.4,0,.2,1);
+  --nav-height: 68px;
+}

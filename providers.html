@@ -78,8 +78,9 @@
     import { initNav } from '/assets/js/nav.js';
     import { supabase } from '/assets/js/supabase-client.js';
     import { getMyProviderProfiles, updateProviderProfile, submitForReview, saveProviderServices, saveServiceAreas, initServiceList } from '/assets/js/providers.js';
-    import { uploadGalleryImage } from '/assets/js/storage.js';
-    import { showAlert, setLoading, escapeHtml, formatDate } from '/assets/js/ui.js';
+    import { uploadGalleryImage, uploadProviderAvatar, validateImage } from '/assets/js/storage.js';
+    import { openImageCropper } from '/assets/js/crop.js';
+    import { showAlert, setLoading, escapeHtml, formatDate, renderAvatar } from '/assets/js/ui.js';
     import { icon } from '/assets/js/icons.js';
     import { requireAuth } from '/assets/js/auth.js';
 
@@ -121,6 +122,7 @@
           <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap">
             <div style="flex:1;min-width:0">
               <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+                <div class="listing-logo" data-logo="${p.id}">${renderAvatar({ avatar_url: p.avatar_url, full_name: p.business_name }, 'lg')}</div>
                 <h2 style="font-size:1.125rem;font-weight:700">${escapeHtml(p.business_name)}</h2>
                 ${STATUS_BADGE[p.status] || ''}
               </div>
@@ -132,6 +134,10 @@
               <button class="btn btn-outline btn-sm edit-btn" data-id="${p.id}" data-name="${escapeHtml(p.business_name)}" data-desc="${escapeHtml(p.description||'')}" data-wa="${escapeHtml(p.whatsapp_number||'')}" data-avail="${escapeHtml(p.availability_note||'')}">Edit</button>
               ${p.status === 'approved' ? `<a href="/provider.html?slug=${p.slug}" class="btn btn-ghost btn-sm">View public</a>` : ''}
               ${['draft','rejected'].includes(p.status) ? `<button class="btn btn-primary btn-sm submit-btn" data-id="${p.id}">Submit for Review</button>` : ''}
+              <label class="btn btn-ghost btn-sm" style="cursor:pointer">
+                Listing logo
+                <input type="file" class="avatar-input" data-id="${p.id}" accept="image/*" style="display:none">
+              </label>
               <label class="btn btn-ghost btn-sm" style="cursor:pointer">
                 Upload photo
                 <input type="file" class="gallery-input" data-id="${p.id}" accept="image/*" style="display:none">
@@ -182,6 +188,32 @@
             showAlert(document.getElementById('profiles-alert'), 'Photo uploaded and pending moderation.', 'success');
           } catch (err) {
             showAlert(document.getElementById('profiles-alert'), err.message || 'Upload failed.');
+          }
+        });
+      });
+
+      // Listing logo — the same crop flow as a personal photo, but it lands on
+      // provider_profiles, so a business picture can never become the owner's.
+      document.querySelectorAll('.avatar-input').forEach(input => {
+        input.addEventListener('change', async e => {
+          const file = e.target.files[0];
+          if (!file) return;
+          const listing = profiles.find(p => p.id === input.dataset.id);
+          const alertEl = document.getElementById('profiles-alert');
+          try {
+            validateImage(file);
+            const cropped = await openImageCropper({ file, title: `Crop the ${listing.business_name} logo` });
+            input.value = '';
+            if (!cropped) return;
+            const { url, path } = await uploadProviderAvatar(user.id, listing.id, cropped);
+            await updateProviderProfile(listing.id, { avatar_url: url, avatar_path: path });
+            listing.avatar_url = url;
+            document.querySelector(`[data-logo="${listing.id}"]`)
+              .innerHTML = renderAvatar({ avatar_url: url, full_name: listing.business_name }, 'lg');
+            showAlert(alertEl, 'Listing logo updated.', 'success');
+          } catch (err) {
+            input.value = '';
+            showAlert(alertEl, err.message || 'Upload failed.');
           }
         });
       });

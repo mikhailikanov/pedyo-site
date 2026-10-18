@@ -227,6 +227,7 @@ async function loadPool() {
   pool = providers.map(c => ({
     slug: c.slug,
     business_name: c.business_name || c.profiles?.full_name || 'Provider',
+    avatar_url: c.avatar_url || '',
     primary_category: c.provider_services?.[0]?.category || '',
     provider_type: c.provider_type,
     rating_avg: Number(c.rating_avg) || 0,
@@ -292,7 +293,9 @@ async function ask(text) {
     const res = await fetch('/ai-chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: turns, candidates: candidatesFor(text) })
+      // avatar_url is only for the pick cards. Prompt tokens are metered, so
+      // a long URL per candidate never leaves the browser.
+      body: JSON.stringify({ messages: turns, candidates: candidatesFor(text).map(({ avatar_url, ...c }) => c) })
     });
     payload = await res.json().catch(() => null);
     if (!res.ok) {
@@ -335,7 +338,7 @@ function pickCard(c) {
     : '<span class="ai-pick-new">New</span>';
   return `
     <a class="ai-pick" href="/provider.html?slug=${encodeURIComponent(c.slug)}">
-      <span class="ai-pick-avatar">${escapeHtml(c.business_name.trim().charAt(0).toUpperCase() || '?')}</span>
+      <span class="ai-pick-avatar">${c.avatar_url ? `<img src="${escapeHtml(c.avatar_url)}" alt="">` : escapeHtml(c.business_name.trim().charAt(0).toUpperCase() || '?')}</span>
       <span class="ai-pick-body">
         <span class="ai-pick-name">${escapeHtml(c.business_name)}${c.identity_reviewed ? icon('badge-check', { size: 14, cls: 'ai-pick-ver' }) : ''}</span>
         <span class="ai-pick-meta">${escapeHtml(c.primary_category || (c.services[0] || 'Pedyo provider'))}${c.areas[0] ? ` · ${escapeHtml(c.areas[0])}` : ''}</span>

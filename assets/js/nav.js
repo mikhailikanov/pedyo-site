@@ -1,6 +1,6 @@
 // Pedyo — Navigation auth state, view mode, unread badge, realtime
 import { supabase } from './supabase-client.js';
-import { escapeHtml, avatarInitials, initNavToggle } from './ui.js';
+import { escapeHtml, renderAvatar, initNavToggle } from './ui.js';
 import { signOut } from './auth.js';
 import { showNotification } from './notify.js';
 import { icon } from './icons.js';
@@ -64,7 +64,15 @@ function paintShell(state) {
   // a business shell with no business. Boolean, so template interpolation of
   // aria-pressed and the active classes stays honest.
   const provider = identity.mode === 'provider' && !!identity.listing;
-  const initials = avatarInitials(provider ? identity.listing.business_name : user.email);
+  // Browsing as a listing paints that listing's own logo. The personal bubble
+  // stays on initials: the listings this shell is built from are already here,
+  // while a face would cost a profiles read on every page of the site.
+  const bubble = renderAvatar(
+    provider
+      ? { avatar_url: identity.listing.avatar_url, full_name: identity.listing.business_name }
+      : { full_name: user.email },
+    'sm'
+  );
 
   actionsEl.innerHTML = `
     ${provider ? `<span class="nav-mode-flag" title="Browsing as ${escapeHtml(identity.listing.business_name)} — switch back in the account menu">
@@ -77,7 +85,7 @@ function paintShell(state) {
     </a>
     <div style="position:relative">
       <button class="nav-avatar-btn" id="nav-avatar-btn" aria-label="Account menu" aria-haspopup="true">
-        <div class="avatar"${provider ? ' style="width:36px;height:36px;font-size:0.8rem;background:var(--green);color:#fff"' : ' style="width:36px;height:36px;font-size:0.8rem"'}>${escapeHtml(initials)}</div>
+        ${bubble}
         ${icon('chevron-down', { size: 14 })}
       </button>
       <div class="nav-dropdown hidden" id="nav-dropdown">

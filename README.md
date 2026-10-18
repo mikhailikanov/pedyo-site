@@ -126,10 +126,23 @@ Things that are not obvious from the code and are easy to break:
   rather than a policy.
 - **RLS policies are permissive and therefore OR-ed.** Adding a broad read policy
   re-widens access for everyone; the moderation gates depend on that not happening.
-- **The avatar path and its policy are one contract.** `uploadAvatar()` writes
-  `avatars/<uid>/avatar.jpg` and the `profiles` bucket policy reads the uid out of
-  `storage.foldername(name)[2]`. Change the path without the policy and every
-  upload fails with "new row violates row-level security policy".
+- **Two avatar keys, one storage policy.** `assets/js/storage.js` writes a person to
+  `avatars/<uid>/avatar.jpg` and a listing to `avatars/<uid>/providers/<listing id>/avatar.jpg`.
+  The uid sits at `storage.foldername(name)[2]` in both shapes, so the `profiles` bucket's
+  owner-write policy covers listing logos without being widened. Change one key without the
+  other and every upload fails with "new row violates row-level security policy". The URL
+  that is stored carries `?v=<timestamp>` because the key never changes, so a CDN holding the
+  old picture is otherwise refreshed only when its cache expires.
+- **A face and a logo are separate columns.** `profiles.avatar_url`/`avatar_path` describe the
+  person, `provider_profiles.avatar_url`/`avatar_path` describe the listing, so one account that
+  has both can carry two different pictures. Every surface that presents a business — the nav
+  bubble in provider mode, the browse and search cards, the listing page, the inbox, the
+  concierge's pick card — reads the listing avatar and falls back to the business initials,
+  never to the owner's face.
+- **The crop is baked before the file leaves the page.** `assets/js/crop.js` lets the user pan,
+  zoom and resize the region, then redraws that region onto a square canvas, so the server only
+  ever receives a finished JPEG and no crop coordinates are stored anywhere. Cancelling the
+  modal resolves `null` and the caller returns before touching storage.
 - **Notifications are generated server-side.** A trigger on `messages` fans rows
   out into `notifications` for every member except the sender. The client never
   inserts them; `assets/js/notify.js` only decides whether a granted browser

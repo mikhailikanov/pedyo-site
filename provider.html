@@ -81,6 +81,12 @@
       const { data: { user } } = await supabase.auth.getUser();
       const isOwner = user?.id === provider.user_id;
       const initials = (provider.business_name || provider.profiles?.full_name || 'P').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+      // The listing's own logo, never its owner's face: provider_profiles
+      // carries the column, so a business picture and a personal one are
+      // separate objects and separate rows.
+      const heroLogo = provider.avatar_url
+        ? `<img class="provider-hero-logo" src="${escapeHtml(provider.avatar_url)}" alt="${escapeHtml(provider.business_name || 'Provider')} logo">`
+        : `<div class="provider-hero-logo">${escapeHtml(initials)}</div>`;
 
       const verBadges = renderVerificationBadges({
         email_confirmed: provider.email_confirmed,
@@ -97,7 +103,7 @@
       document.getElementById('provider-main').innerHTML = `
         <div class="provider-hero">
           <div class="provider-hero-inner">
-            <div class="provider-hero-logo">${escapeHtml(initials)}</div>
+            ${heroLogo}
             <div style="flex:1;min-width:0">
               <div class="provider-hero-name">${escapeHtml(provider.business_name || provider.profiles?.full_name)}</div>
               <div class="provider-hero-meta">

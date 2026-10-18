@@ -947,7 +947,9 @@ create policy "storage_providers_public_read" on storage.objects
 
 -- Owners write under their own uid prefix. upsert:true on avatars
 -- means UPDATE on a fixed path must be allowed too. storage.js names
--- these paths avatars/<uid>/avatar.jpg, so the uid is folder two.
+-- these paths avatars/<uid>/avatar.jpg for a person and
+-- avatars/<uid>/providers/<listing id>/avatar.jpg for a listing, so the
+-- uid is folder two either way and one policy covers both.
 drop policy if exists "storage_profiles_owner_write" on storage.objects;
 create policy "storage_profiles_owner_write" on storage.objects
   for all to authenticated using (
@@ -1831,4 +1833,38 @@ select cron.schedule('pedyo-moderation-submit', '*/30 * * * *',
   $cmd$select public.moderation_submit(25)$cmd$);
 select cron.schedule('pedyo-moderation-collect', '* * * * *',
   $cmd$select public.moderation_collect()$cmd$);
+
+-- ------------------------------------------------------------
+-- Independent avatars: one account, two pictures
+--
+-- profiles.avatar_url is the person; provider_profiles.avatar_url is the
+-- listing. Before this, both identities rendered the same column, so
+-- changing a business logo changed the owner's face everywhere.
+--
+-- Listing avatars live in the same public bucket as personal ones, under
+-- avatars/<uid>/providers/<pid>/avatar.jpg. The uid stays the second path
+-- segment, which is what storage_profiles_owner_write already checks, so
+-- an owner can only ever write a logo onto a folder they own — and no new
+-- policy is needed to make the two kinds of avatar independent.
+-- ------------------------------------------------------------
+
+alter table public.profiles          add column if not exists avatar_path text;
+alter table public.provider_profiles add column if not exists avatar_url  text;
+alter table public.provider_profiles add column if not exists avatar_path text;
+
+-- Existing personal avatars: the key is the tail of the public URL,
+-- .../object/public/profiles/<key>. Nullable, so rows without a photo and
+-- any URL that did not come from this bucket stay NULL rather than claiming
+-- a key that does not exist.
+update public.profiles
+   set avatar_path = nullif(substring(avatar_url from '/object/public/profiles/([^?]+)'), '')
+ where avatar_url is not null
+   and avatar_path is null;
+
+-- Listing avatars start empty on purpose. Falling back to the owner's
+-- personal photo here would re-couple the two columns and make the new
+-- independence invisible: a listing with no logo of its own renders the
+-- business initials, like every card did before.
+comment on column public.profiles.avatar_url          is 'Personal photo; key in profiles.avatar_path (avatars/<uid>/avatar.jpg).';
+comment on column public.provider_profiles.avatar_url is 'Listing logo; key in avatar_path (avatars/<uid>/providers/<pid>/avatar.jpg). Never inherits the owner personal photo.';
 

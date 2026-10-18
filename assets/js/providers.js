@@ -1,6 +1,6 @@
 // Pedyo — Provider profile CRUD and rendering
 import { supabase } from './supabase-client.js';
-import { escapeHtml, formatDate, renderVerificationBadges, truncate, avatarInitials } from './ui.js';
+import { escapeHtml, formatDate, renderVerificationBadges, truncate, renderAvatar } from './ui.js';
 import { icon } from './icons.js';
 
 export async function getProviderBySlug(slug) {
@@ -309,7 +309,7 @@ export function renderProviderCard(provider) {
   return `
     <a href="/provider.html?slug=${encodeURIComponent(provider.slug)}" class="provider-card card-hover" style="text-decoration:none;color:inherit">
       <div class="provider-card-header">
-        <div class="avatar avatar-lg" style="background:var(--green)">${escapeHtml(avatarInitials(name))}</div>
+        ${renderAvatar({ avatar_url: provider.avatar_url, full_name: name }, 'lg')}
         <div style="flex:1;min-width:0">
           <div class="provider-card-name">${escapeHtml(name)}</div>
           <div class="provider-card-type">${type}</div>

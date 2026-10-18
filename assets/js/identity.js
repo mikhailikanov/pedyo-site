@@ -44,7 +44,7 @@ export async function getMyListings(userId, force = false) {
   if (!force && cache?.userId === userId) return cache.listings;
   const { data, error } = await supabase
     .from('provider_profiles')
-    .select('id, business_name, slug, status, provider_type')
+    .select('id, business_name, slug, status, provider_type, avatar_url')
     .eq('user_id', userId)
     .order('created_at', { ascending: true });
   const listings = error ? [] : (data || []);

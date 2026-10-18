@@ -156,9 +156,15 @@
 }
 .avatar-lg { width: 56px; height: 56px; font-size: var(--font-size-lg); }
 .avatar-xl { width: 96px; height: 96px; font-size: var(--font-size-2xl); }
-.avatar-stack { position: relative; width: 40px; height: 40px; flex-shrink: 0; }
+/* The account bubble in the nav, which is smaller than the default circle. */
+.avatar-sm { width: 36px; height: 36px; font-size: 0.8rem; }
+/* The stack carries no size of its own: .avatar and the -lg/-xl modifiers
+   decide the circle, so a stacked avatar can be any size. */
+.avatar-stack { position: relative; flex-shrink: 0; }
 .avatar-stack > * { position: absolute; inset: 0; width: 100%; height: 100%; }
 .avatar-stack img { border-radius: var(--radius-full); object-fit: cover; }
+/* Paint target for a listing logo, which is re-rendered in place after an upload. */
+.listing-logo { display: flex; }
 
 /* ── Verification badges ── */
 .verify-badge {
@@ -231,6 +237,70 @@
   transition: background var(--transition), color var(--transition);
 }
 .modal-close:hover { background: var(--n-200); color: var(--color-text); }
+
+/* ── Image cropper ─ */
+/* Opened over a page that is already scrolled, so it sits above the
+   concierge strip (z 900) and every nav dropdown. */
+.crop-overlay { z-index: 1200; }
+.modal-crop { max-width: 470px; padding: var(--space-6); }
+.crop-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.crop-title { font-size: var(--font-size-base); font-weight: 750; }
+.crop-x {
+  background: var(--n-100); border: none; cursor: pointer; flex-shrink: 0;
+  width: 30px; height: 30px; border-radius: var(--radius-full);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--color-text-muted);
+}
+.crop-x:hover { background: var(--n-200); color: var(--color-text); }
+.crop-hint { font-size: var(--font-size-xs); color: var(--color-text-muted); line-height: 1.5; margin: 4px 0 var(--space-4); }
+.crop-stage {
+  position: relative; margin: 0 auto; overflow: hidden;
+  background: #0B1F1A;
+  border-radius: var(--radius-lg);
+  touch-action: none; cursor: grab; outline: none;
+}
+.crop-stage:active { cursor: grabbing; }
+.crop-stage:focus-visible { box-shadow: 0 0 0 2px var(--gold); }
+/* Natural pixel size, scaled by JS: transform-origin 0 0 keeps the pan
+   offsets in the same coordinate space as the crop frame. */
+.crop-img {
+  position: absolute; top: 0; left: 0; max-width: none;
+  transform-origin: 0 0; user-select: none; -webkit-user-drag: none;
+}
+.crop-frame {
+  position: absolute; border: 2px solid rgba(255,255,255,0.92); border-radius: 3px;
+  /* The shade is the frame's own spread shadow, clipped by the stage:
+     everything outside the region darkens without a second element that
+     would have to track the region's size. */
+  box-shadow: 0 0 0 9999px rgba(6,26,21,0.62);
+  cursor: move; touch-action: none;
+}
+.crop-grid {
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    repeating-linear-gradient(to right, rgba(255,255,255,0.45) 0 1px, transparent 1px calc(100% / 3)),
+    repeating-linear-gradient(to bottom, rgba(255,255,255,0.45) 0 1px, transparent 1px calc(100% / 3));
+}
+.crop-handle {
+  position: absolute; width: 18px; height: 18px; padding: 0;
+  background: #fff; border: 2px solid var(--green); border-radius: var(--radius-full);
+  touch-action: none;
+}
+.crop-handle-nw { top: -10px; left: -10px; cursor: nwse-resize; }
+.crop-handle-se { bottom: -10px; right: -10px; cursor: nwse-resize; }
+.crop-handle-ne { top: -10px; right: -10px; cursor: nesw-resize; }
+.crop-handle-sw { bottom: -10px; left: -10px; cursor: nesw-resize; }
+.crop-zoom { display: flex; align-items: center; gap: var(--space-3); margin: var(--space-4) 0 var(--space-3); color: var(--color-text-muted); }
+.crop-zoom-icon { display: inline-flex; flex-shrink: 0; }
+.crop-range { flex: 1; accent-color: var(--green); cursor: pointer; }
+.crop-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); }
+.crop-preview { width: 46px; height: 46px; flex-shrink: 0; border-radius: var(--radius-full); overflow: hidden; border: 1px solid var(--color-border); background: #0B1F1A; }
+.crop-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.crop-actions { display: flex; gap: var(--space-3); }
+@media (max-width: 520px) {
+  .modal-crop { padding: var(--space-5) var(--space-4); }
+  .crop-actions { flex: 1; justify-content: flex-end; }
+}
 
 /* ── Tabs ─ */
 .tabs { display: flex; border-bottom: 1.5px solid var(--color-border); gap: var(--space-1); }
@@ -476,7 +546,8 @@
   transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition);
 }
 .ai-pick:hover { border-color: rgba(21,122,90,0.45); box-shadow: var(--shadow-sm); transform: translateY(-1px); }
-.ai-pick-avatar { display: grid; place-items: center; width: 26px; height: 26px; flex-shrink: 0; border-radius: var(--radius-full); background: var(--green-tint); color: var(--green-dark); font-size: 0.6875rem; font-weight: 800; }
+.ai-pick-avatar { display: grid; place-items: center; width: 26px; height: 26px; flex-shrink: 0; border-radius: var(--radius-full); background: var(--green-tint); color: var(--green-dark); font-size: 0.6875rem; font-weight: 800; overflow: hidden; }
+.ai-pick-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .ai-pick-body { flex: 1; min-width: 0; }
 .ai-pick-name { display: flex; align-items: center; gap: 0.25rem; font-size: 0.78125rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ai-pick-ver { color: var(--green-mid); flex-shrink: 0; }

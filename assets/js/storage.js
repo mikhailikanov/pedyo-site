@@ -39,16 +39,32 @@ export async function compressImage(file, maxWidth = 1200, quality = 0.85) {
   });
 }
 
-export async function uploadAvatar(userId, file) {
+// A person and their listings keep separate objects, so changing a business
+// logo never touches the owner's face. Both keys sit under the owner's uid as
+// the second segment, which is what storage_profiles_owner_write checks, and
+// the listing id is its own directory — the two can never overwrite each other.
+export const userAvatarKey = userId => `avatars/${userId}/avatar.jpg`;
+export const providerAvatarKey = (userId, providerId) => `avatars/${userId}/providers/${providerId}/avatar.jpg`;
+
+async function putAvatar(path, file) {
   validateImage(file);
   const compressed = await compressImage(file, 400, 0.9);
-  const path = `avatars/${userId}/avatar.jpg`;
   const { error } = await supabase.storage
     .from('profiles')
     .upload(path, compressed, { upsert: true, contentType: 'image/jpeg' });
   if (error) throw error;
   const { data } = supabase.storage.from('profiles').getPublicUrl(path);
-  return data.publicUrl;
+  // One fixed key per identity means the CDN and the browser both hold the
+  // last face forever, so the stored URL carries the upload time.
+  return { url: `${data.publicUrl}?v=${Date.now()}`, path };
+}
+
+export function uploadUserAvatar(userId, file) {
+  return putAvatar(userAvatarKey(userId), file);
+}
+
+export function uploadProviderAvatar(userId, providerId, file) {
+  return putAvatar(providerAvatarKey(userId, providerId), file);
 }
 
 export async function uploadGalleryImage(providerId, file) {

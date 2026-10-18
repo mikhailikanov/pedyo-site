@@ -63,8 +63,9 @@
     import { initNav } from '/assets/js/nav.js';
     import { supabase } from '/assets/js/supabase-client.js';
     import { getProfile, updateProfile, requestAccountDeletion } from '/assets/js/profiles.js';
-    import { uploadAvatar } from '/assets/js/storage.js';
-    import { showAlert, setLoading, avatarInitials } from '/assets/js/ui.js';
+    import { uploadUserAvatar, validateImage } from '/assets/js/storage.js';
+    import { openImageCropper } from '/assets/js/crop.js';
+    import { showAlert, setLoading, avatarInitials, escapeHtml } from '/assets/js/ui.js';
     import { requireAuth } from '/assets/js/auth.js';
 
     document.getElementById('nav-placeholder').innerHTML = renderNav('');
@@ -87,23 +88,35 @@
 
     // Avatar
     const avatarEl = document.getElementById('avatar-display');
-    if (profile?.avatar_url) {
-      avatarEl.innerHTML = `<img src="${profile.avatar_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" alt="Avatar">`;
-    } else {
-      avatarEl.textContent = avatarInitials(profile?.full_name || user.email);
+    const fallbackName = profile?.full_name || user.email;
+    function paintAvatar(url) {
+      if (url) {
+        avatarEl.innerHTML = `<img src="${escapeHtml(url)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" alt="Avatar">`;
+      } else {
+        avatarEl.textContent = avatarInitials(fallbackName);
+      }
     }
+    paintAvatar(profile?.avatar_url);
 
-    // Avatar upload
+    // Avatar: crop first, upload second. Cancelling the crop leaves no trace —
+    // nothing has been read from the disk by then except to draw the preview.
     document.getElementById('avatar-input').addEventListener('change', async e => {
       const file = e.target.files[0];
       if (!file) return;
+      const input = e.target;
       const alertEl = document.getElementById('profile-alert');
       try {
-        const url = await uploadAvatar(user.id, file);
-        await updateProfile(user.id, { avatar_url: url });
-        avatarEl.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" alt="Avatar">`;
+        validateImage(file);
+        const cropped = await openImageCropper({ file, title: 'Crop your profile photo' });
+        // Same file picked twice still has to run the handler again.
+        input.value = '';
+        if (!cropped) return;
+        const { url, path } = await uploadUserAvatar(user.id, cropped);
+        await updateProfile(user.id, { avatar_url: url, avatar_path: path });
+        paintAvatar(url);
         showAlert(alertEl, 'Photo updated!', 'success');
       } catch (err) {
+        input.value = '';
         showAlert(alertEl, err.message || 'Failed to upload photo.');
       }
     });

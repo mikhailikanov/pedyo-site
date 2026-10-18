@@ -11,7 +11,7 @@ const INBOX_SELECT = `
   conversation_members!inner(user_id, inbox_type, unread_count),
   customer:profiles!conversations_customer_id_fkey(full_name, avatar_url),
   provider:profiles!conversations_provider_id_fkey(full_name, avatar_url),
-  provider_profiles(business_name, slug),
+  provider_profiles(business_name, slug, avatar_url),
   messages(content, created_at, sender_id)
 `;
 
@@ -27,7 +27,9 @@ function shapeInboxRow(row, userId) {
   return {
     ...row,
     other_party_name: name || 'Pedyo user',
-    other_party_avatar: other?.avatar_url || null,
+    // On the business side of a thread the listing leads; the owner's own
+    // photo only backs it up, because whoever replies is still a person.
+    other_party_avatar: (iAmCustomer ? row.provider_profiles?.avatar_url : null) || other?.avatar_url || null,
     unread_count: row.conversation_members?.[0]?.unread_count || 0
   };
 }

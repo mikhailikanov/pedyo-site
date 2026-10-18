@@ -95,13 +95,15 @@ export function avatarInitials(name) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+// Photo over initials. The initials stay underneath so a deleted object, a
+// cold CDN or a blocked hotlink still shows a person instead of a blank circle.
 export function renderAvatar(profile, size = '') {
-  const cls = `avatar${size ? ' avatar-' + size : ''}`;
+  const cls = `avatar avatar-stack${size ? ' avatar-' + size : ''}`;
+  const initials = avatarInitials(profile?.full_name);
   if (profile?.avatar_url) {
-    return `<img src="${escapeHtml(profile.avatar_url)}" class="${cls}" alt="${escapeHtml(profile.full_name || 'User')}" onerror="this.outerHTML=this.nextElementSibling.outerHTML">
-            <div class="${cls}" aria-hidden="true">${avatarInitials(profile.full_name)}</div>`;
+    return `<div class="${cls}">${escapeHtml(initials)}<img src="${escapeHtml(profile.avatar_url)}" alt="" onerror="this.style.display='none'"></div>`;
   }
-  return `<div class="${cls}">${avatarInitials(profile?.full_name)}</div>`;
+  return `<div class="${cls}">${escapeHtml(initials)}</div>`;
 }
 
 export function debounce(fn, delay = 300) {

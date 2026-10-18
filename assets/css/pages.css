@@ -273,8 +273,17 @@
 .auth-footer a:hover { text-decoration: underline; }
 
 /* ── Messaging ─ */
-.messages-layout { display: grid; grid-template-columns: 340px 1fr; height: calc(100vh - var(--nav-height)); background: #fff; }
-.conversations-list { border-right: 1px solid var(--color-border); overflow-y: auto; background: var(--n-50); }
+/* The row is minmax(0,1fr) rather than auto on purpose: an auto row sizes itself
+   to the thread's full height, which pushes the composer below the fold on a page
+   whose body is overflow:hidden — long conversations then have no way to type. */
+.messages-layout {
+  display: grid; grid-template-columns: 340px 1fr; grid-template-rows: minmax(0, 1fr);
+  /* --nav-height covers .nav-inner only; the nav adds a 1px bottom border. */
+  height: calc(100vh - var(--nav-height) - 1px);
+  height: calc(100dvh - var(--nav-height) - 1px);
+  background: #fff;
+}
+.conversations-list { border-right: 1px solid var(--color-border); overflow-y: auto; background: var(--n-50); min-height: 0; }
 .conversations-header { padding: var(--space-5); border-bottom: 1px solid var(--color-border); background: #fff; position: sticky; top: 0; z-index: 2; }
 .conversations-header h2 { font-size: var(--font-size-lg); font-weight: 750; }
 .conversation-item {
@@ -296,7 +305,7 @@
 .conv-meta { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-1); flex-shrink: 0; }
 .conv-time { font-size: 0.6875rem; color: var(--color-text-soft); }
 .avatar-customer { background: linear-gradient(135deg, #3D5A63, var(--charcoal)); }
-.chat-area { display: flex; flex-direction: column; min-width: 0; }
+.chat-area { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .chat-header { padding: var(--space-4) var(--space-6); border-bottom: 1px solid var(--color-border); display: flex; align-items: center; gap: var(--space-4); background: #fff; }
 .chat-messages {
   flex: 1; overflow-y: auto; padding: var(--space-6);
@@ -361,7 +370,7 @@
   .provider-hero-inner { flex-wrap: wrap; }
   .provider-hero-actions { margin-left: 0; flex-direction: row; width: 100%; }
   .provider-hero-name { font-size: var(--font-size-2xl); }
-  .messages-layout { grid-template-columns: 1fr; height: auto; }
-  .conversations-list { height: 320px; border-right: none; border-bottom: 1px solid var(--color-border); }
+  .messages-layout { grid-template-columns: 1fr; grid-template-rows: 320px minmax(0, 1fr); }
+  .conversations-list { border-right: none; border-bottom: 1px solid var(--color-border); }
   .auth-card { padding: var(--space-6); }
 }

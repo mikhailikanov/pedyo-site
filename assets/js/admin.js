@@ -146,15 +146,35 @@ export async function resolveReport(reportId, adminId, resolution) {
 }
 
 // ── Reviews moderation ────────────────────────────────────────────────────────
-export async function getAllReviews({ page = 1, limit = 20 } = {}) {
+// The list is paged, so a filter is what makes the automation usable:
+// without it an admin has to click through every page to find the rows
+// the moderator flagged or the ones it has not reached yet.
+export async function getAllReviews({ page = 1, limit = 20, filter = 'all' } = {}) {
   const from = (page - 1) * limit;
-  const { data, error, count } = await supabase
+  let query = supabase
     .from('reviews')
-    .select('*, profiles(full_name), provider_profiles(business_name)', { count: 'exact' })
+    .select('*, profiles(full_name), provider_profiles(business_name)', { count: 'exact' });
+  if (filter === 'flagged') query = query.eq('moderation_status', 'flagged');
+  else if (filter === 'unchecked') query = query.eq('moderation_status', 'unchecked');
+  else if (filter === 'hidden') query = query.eq('hidden', true);
+  const { data, error, count } = await query
     .order('created_at', { ascending: false })
     .range(from, from + limit - 1);
   if (error) throw error;
   return { reviews: data || [], total: count || 0 };
+}
+
+export async function getReviewModerationStats() {
+  const stats = {};
+  for (const status of ['unchecked', 'clean', 'flagged']) {
+    const { count, error } = await supabase
+      .from('reviews')
+      .select('id', { count: 'exact', head: true })
+      .eq('moderation_status', status);
+    if (error) throw error;
+    stats[status] = count || 0;
+  }
+  return stats;
 }
 
 export async function toggleReviewVisibility(reviewId, hidden, adminId) {
@@ -162,6 +182,29 @@ export async function toggleReviewVisibility(reviewId, hidden, adminId) {
     .from('reviews').update({ hidden }).eq('id', reviewId);
   if (error) throw error;
   await logAdminAction(adminId, hidden ? 'hide_review' : 'unhide_review', reviewId);
+}
+
+// These two RPCs record their own audit rows in Postgres — the pass table
+// and review.restore — so logging them again here would only double-count.
+export async function runModerationNow(limit = 25) {
+  const { data, error } = await supabase.rpc('moderation_run_now', { p_limit: limit });
+  if (error) throw error;
+  return data ?? 0;
+}
+
+export async function restoreReview(reviewId) {
+  const { error } = await supabase.rpc('restore_review', { p_review_id: reviewId });
+  if (error) throw error;
+}
+
+export async function getModerationPasses(limit = 5) {
+  const { data, error } = await supabase
+    .from('moderation_pass')
+    .select('id, status, submitted, applied, hidden_count, detail, created_at, collected_at')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
 }
 
 // ── Users ─────────────────────────────────────────────────────────────────────
@@ -173,6 +216,47 @@ export async function searchUsers(query) {
     .limit(50);
   if (error) throw error;
   return data || [];
+}
+
+export async function setUserBlocked(userId, blocked, adminId) {
+  const { error } = await supabase
+    .from('profiles').update({ blocked }).eq('id', userId);
+  if (error) throw error;
+  await logAdminAction(adminId, blocked ? 'block_user' : 'unblock_user', userId);
+}
+
+// ── Blocked words ─────────────────────────────────────────────────────────────
+// The list is admin-only: the masking happens in Postgres, so no page
+// needs it, and publishing it would only teach people what to spell around.
+export async function getBlockedTerms() {
+  const { data, error } = await supabase
+    .from('blocked_terms')
+    .select('*')
+    .order('language', { ascending: true })
+    .order('term', { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function addBlockedTerm(rawTerm, language, adminId) {
+  const term = String(rawTerm || '').trim().toLowerCase();
+  if (!/^[a-z0-9' -]{2,40}$/.test(term)) {
+    throw new Error('Use 2–40 letters, numbers, spaces, hyphens or apostrophes.');
+  }
+  const { error } = await supabase
+    .from('blocked_terms').insert({ term, language, created_by: adminId });
+  if (error) {
+    if (error.code === '23505') throw new Error(`"${term}" is already blocked.`);
+    throw error;
+  }
+  await logAdminAction(adminId, 'add_blocked_term', term, { language });
+}
+
+export async function removeBlockedTerm(termId, term, adminId) {
+  const { error } = await supabase
+    .from('blocked_terms').delete().eq('id', termId);
+  if (error) throw error;
+  await logAdminAction(adminId, 'remove_blocked_term', termId, { term });
 }
 
 // ── Verification docs ─────────────────────────────────────────────────────────

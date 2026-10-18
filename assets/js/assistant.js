@@ -10,6 +10,8 @@ import { escapeHtml } from './ui.js';
 import { searchProviders } from './providers.js';
 
 const STORE_KEY = 'pedyo_concierge';
+const POS_KEY = 'pedyo_dock_pos';
+const DOCK_MARGIN = 8;
 const MAX_POOL = 40;
 // Groq metered accounts are capped on tokens per minute and every candidate
 // costs prompt tokens, so the panel forwards a shortlist rather than the whole
@@ -73,6 +75,84 @@ export function mountAssistant() {
   const panel = root.querySelector('#ai-panel');
   const launcher = root.querySelector('#ai-launcher');
 
+  // The dock is parked out of the way by the CSS default, but a fixed corner is
+  // still somebody's button, so it can be dragged or nudged and the spot is kept.
+  let pos = null;
+  const place = (right, bottom) => {
+    const maxRight = Math.max(DOCK_MARGIN, window.innerWidth - root.offsetWidth - DOCK_MARGIN);
+    const maxBottom = Math.max(DOCK_MARGIN, window.innerHeight - root.offsetHeight - DOCK_MARGIN);
+    pos = {
+      right: Math.min(Math.max(right, DOCK_MARGIN), maxRight),
+      bottom: Math.min(Math.max(bottom, DOCK_MARGIN), maxBottom),
+    };
+    root.style.right = `${pos.right}px`;
+    root.style.bottom = `${pos.bottom}px`;
+    return pos;
+  };
+  const restore = () => {
+    const saved = readPos();
+    if (saved) place(saved.right, saved.bottom);
+  };
+  restore();
+  window.addEventListener('resize', restore);
+
+  let drag = null;
+  let dragged = false;
+  launcher.title = 'Drag, or press an arrow key, to move the concierge';
+
+  launcher.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const box = root.getBoundingClientRect();
+    drag = {
+      x: e.clientX,
+      y: e.clientY,
+      right: window.innerWidth - box.right,
+      bottom: window.innerHeight - box.bottom,
+    };
+    dragged = false;
+    // Touch pointers already hold implicit capture on their target, and some
+    // browsers reject an explicit request for them. Losing the capture must not
+    // lose the drag, so the failure is swallowed and the move events keep
+    // arriving on this element either way.
+    try { launcher.setPointerCapture(e.pointerId); } catch {}
+  });
+
+  launcher.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x;
+    const dy = e.clientY - drag.y;
+    if (!dragged && Math.hypot(dx, dy) < 6) return;
+    dragged = true;
+    launcher.classList.add('dragging');
+    place(drag.right - dx, drag.bottom - dy);
+  });
+
+  const endDrag = () => {
+    if (!drag) return;
+    drag = null;
+    launcher.classList.remove('dragging');
+    if (dragged && pos) writePos(pos);
+  };
+  launcher.addEventListener('pointerup', endDrag);
+  launcher.addEventListener('pointercancel', endDrag);
+
+  launcher.addEventListener('keydown', e => {
+    const step = e.shiftKey ? 40 : 12;
+    const moves = {
+      ArrowLeft: [step, 0],
+      ArrowRight: [-step, 0],
+      ArrowUp: [0, step],
+      ArrowDown: [0, -step],
+    };
+    const move = moves[e.key];
+    if (!move) return;
+    e.preventDefault();
+    const box = root.getBoundingClientRect();
+    const from = pos || { right: window.innerWidth - box.right, bottom: window.innerHeight - box.bottom };
+    writePos(place(from.right + move[0], from.bottom + move[1]));
+  });
+
+  let openFrom = null;
   const setOpen = (open) => {
     panel.classList.toggle('hidden', !open);
     launcher.classList.toggle('hidden', open);
@@ -80,11 +160,25 @@ export function mountAssistant() {
     if (open) {
       paint();
       ensurePool().catch(() => {});
+      // An open panel is far taller than the launcher, so the parked spot may no
+      // longer fit. The launcher is hidden while open, so the shift is invisible
+      // and the original spot comes back on close.
+      if (pos) {
+        openFrom = pos;
+        place(pos.right, pos.bottom);
+      }
       input.focus();
+    } else if (openFrom) {
+      const back = openFrom;
+      openFrom = null;
+      place(back.right, back.bottom);
     }
   };
 
-  launcher.addEventListener('click', () => setOpen(true));
+  launcher.addEventListener('click', () => {
+    if (dragged) { dragged = false; return; }
+    setOpen(true);
+  });
   root.querySelector('#ai-close').addEventListener('click', () => {
     setOpen(false);
     launcher.focus();
@@ -290,4 +384,18 @@ function readStore() {
 
 function writeStore() {
   try { sessionStorage.setItem(STORE_KEY, JSON.stringify(turns)); } catch {}
+}
+
+function readPos() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(POS_KEY));
+    if (!raw || !Number.isFinite(raw.right) || !Number.isFinite(raw.bottom)) return null;
+    return { right: raw.right, bottom: raw.bottom };
+  } catch {
+    return null;
+  }
+}
+
+function writePos(p) {
+  try { localStorage.setItem(POS_KEY, JSON.stringify(p)); } catch {}
 }

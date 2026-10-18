@@ -178,10 +178,33 @@ export function renderConversationItem(conv, currentUserId, isActive = false, av
 
 export function renderMessage(msg, currentUserId) {
   const isSent = msg.sender_id === currentUserId;
+  // Vulgar text is masked in the database, not here. The writer sees what
+  // they wrote; the reader gets the mask and decides whether to look past
+  // it. Both texts travel as data, never as markup.
+  const reveal = !isSent && msg.censored;
+  const text = isSent ? (msg.original_content || msg.content) : msg.content;
   return `
     <div class="msg-row ${isSent ? 'sent' : 'received'}">
-      <div class="msg-bubble ${isSent ? 'sent' : 'received'}">${escapeHtml(msg.content)}</div>
+      <div class="msg-bubble ${isSent ? 'sent' : 'received'}">
+        <span class="msg-text">${escapeHtml(text)}</span>
+        ${reveal ? `<button type="button" class="msg-unmask" data-shown="0"
+              data-masked="${escapeHtml(msg.content)}"
+              data-original="${escapeHtml(msg.original_content || '')}">Show message</button>` : ''}
+      </div>
       <div class="msg-time">${formatTime(msg.created_at)}</div>
     </div>
   `;
 }
+
+// One delegated listener for every thread: messages arrive from the REST
+// read, from realtime, and from the send echo, so per-node wiring would
+// have to be repeated at each of those three call sites.
+document.addEventListener('click', event => {
+  const btn = event.target.closest('.msg-unmask');
+  if (!btn) return;
+  const shown = btn.dataset.shown === '1';
+  const bubble = btn.closest('.msg-bubble');
+  bubble.querySelector('.msg-text').textContent = shown ? btn.dataset.masked : btn.dataset.original;
+  btn.dataset.shown = shown ? '0' : '1';
+  btn.textContent = shown ? 'Show message' : 'Hide';
+});

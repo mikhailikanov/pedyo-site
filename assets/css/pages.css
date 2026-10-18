@@ -306,6 +306,7 @@
     var(--green-tint-2);
   background-color: var(--green-tint-2);
 }
+.chat-error { padding: var(--space-3) var(--space-6) 0; font-size: 0.8125rem; color: #8A1D1D; background: #fff; }
 .chat-input-area { padding: var(--space-4) var(--space-6); border-top: 1px solid var(--color-border); background: #fff; display: flex; gap: var(--space-3); align-items: flex-end; }
 .chat-input { flex: 1; border: 1.5px solid var(--color-border-strong); border-radius: var(--radius-lg); padding: var(--space-3) var(--space-4); resize: none; font-size: var(--font-size-sm); max-height: 120px; }
 .chat-input:focus { outline: none; border-color: var(--green); box-shadow: var(--ring); }

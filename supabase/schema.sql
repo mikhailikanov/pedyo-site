@@ -1145,3 +1145,690 @@ drop trigger if exists provider_images_moderation_guard on public.provider_image
 create trigger provider_images_moderation_guard
   before insert or update on public.provider_images
   for each row execute function public.guard_image_moderation();
+
+-- ------------------------------------------------------------
+-- Content protection — blocked words and blocked accounts
+--
+-- Masking happens in Postgres, not in the browser, because the
+-- frontend is a thin client over PostgREST: anyone can hand-craft
+-- the same POST request and skip a client-side filter entirely.
+--
+-- The masked text replaces the original in the column every reader
+-- already sees, so no page has to remember to ask for a filtered
+-- variant. Chat is the one place the raw text is kept — the reader
+-- of a message chooses whether to look past the mask.
+-- ------------------------------------------------------------
+
+create table if not exists public.blocked_terms (
+  id         uuid primary key default gen_random_uuid(),
+  term       text not null unique check (length(term) between 2 and 40
+                                          and term ~* '^[a-z0-9'' \-]+$'),
+  language   text not null default 'en' check (language in ('en','sn')),
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+alter table public.blocked_terms enable row level security;
+
+-- The list is not public: a filter whose contents are published is a
+-- filter that can be steered around. Admins read and edit it.
+drop policy if exists blocked_terms_admin_rw on public.blocked_terms;
+create policy blocked_terms_admin_rw on public.blocked_terms
+  for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
+grant select, insert, update, delete on public.blocked_terms to authenticated;
+
+-- Seeded once, on an empty table only, so edits made from the admin
+-- console are never reverted by a re-run of this file. The list is a
+-- starting point, not a complete inventory of Shona or English abuse.
+-- Several entries are ordinary words used as insults (mazino, bhora,
+-- nyanga), which is the trade-off a word list makes: an over-eager
+-- mask is recoverable in chat, a missed one is not.
+-- The Shona additions are insult and excrement terms only. Words that
+-- carry an ordinary meaning alongside the vulgar one were left out on
+-- purpose — imbwa (dog), mboko (rhino), kukwira (to climb), dongo
+-- (belly) and gadadzva (to fix) would mask plain reviews as often as
+-- abusive ones.
+insert into public.blocked_terms (term, language)
+select t.term, t.language from (values
+  ('fuck','en'), ('fucking','en'), ('fuckoff','en'), ('shit','en'), ('bullshit','en'),
+  ('bastard','en'), ('bitch','en'), ('asshole','en'), ('arsehole','en'), ('prick','en'),
+  ('cunt','en'), ('cock','en'), ('pussy','en'), ('slut','en'), ('whore','en'),
+  ('skank','en'), ('wanker','en'), ('bollocks','en'), ('bugger','en'), ('piss','en'),
+  ('pissing','en'), ('crap','en'), ('damn','en'), ('goddamn','en'), ('douche','en'),
+  ('twat','en'), ('tit','en'), ('knob','en'), ('jizz','en'), ('slag','en'),
+  ('faggot','en'), ('retard','en'), ('tranny','en'), ('kaffir','en'), ('nigger','en'),
+  ('nigga','en'), ('coon','en'), ('spic','en'), ('chink','en'), ('kike','en'),
+  ('mhure','sn'), ('hure','sn'), ('chirehure','sn'), ('tsvete','sn'), ('mboro','sn'),
+  ('dota','sn'), ('mhere','sn'), ('kondwara','sn'), ('bhora','sn'), ('mazino','sn'),
+  ('svinza','sn'), ('swina','sn'), ('nyanga','sn'), ('nweti','sn'), ('ganda','sn'),
+  ('murunhu','sn'), ('mudhumeni','sn'), ('chibharo','sn'), ('kutsaura','sn'), ('tshitandaa','sn'),
+  ('beche','sn'), ('benzi','sn'), ('choya','sn'), ('dambe','sn'), ('dhodhi','sn'),
+  ('duzvi','sn'), ('dzoi','sn'), ('futseke','sn'), ('godzva','sn'), ('ihure','sn'),
+  ('mabono','sn'), ('machende','sn'), ('mamisa','sn'), ('matinje','sn'), ('mbolo','sn'),
+  ('mhata','sn'), ('mukosho','sn'), ('musudhu','sn'), ('nzenza','sn'), ('pamhata','sn'),
+  ('rombe','sn'), ('svira','sn'), ('tsete','sn'), ('tsvina','sn'), ('zidzoro','sn'),
+  ('zimino','sn'), ('zirema','sn')
+) as t(term, language)
+where not exists (select 1 from public.blocked_terms);
+
+-- Replace every blocked word with a same-shaped mask, keeping the
+-- first letter and any spaces so the reader can tell a word was
+-- there at all.
+create or replace function public.censor_text(p_text text)
+returns text
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare r record;
+begin
+  if p_text is null or p_text = '' then
+    return p_text;
+  end if;
+  for r in select term from public.blocked_terms loop
+    -- \y is a word boundary: 'ass' masks 'ass' but not 'class'.
+    p_text := regexp_replace(
+      p_text,
+      '\y' || r.term || '\y',
+      left(r.term, 1) || regexp_replace(substr(r.term, 2), '[^ ]', '*', 'g'),
+      'gi'
+    );
+  end loop;
+  return p_text;
+end;
+$$;
+
+revoke all on function public.censor_text(text) from public;
+
+-- One trigger per prose column. plpgsql resolves NEW's fields when the
+-- function is created, so a single shared function cannot name
+-- `description` and `bio` and `content` at once — generating one small
+-- function per table keeps the rule in one place and every function
+-- statically typed. Same shape as the policy loops above.
+do $$
+declare r record;
+begin
+  for r in
+    select * from (values
+      ('messages',          'content',      true),
+      ('reviews',           'content',      false),
+      ('profiles',          'bio',          false),
+      ('provider_profiles', 'description',  false),
+      ('provider_services', 'service_name', false)
+    ) as v(tbl, col, keep_raw)
+  loop
+    execute format($f$
+      create or replace function public.censor_%1$I()
+      returns trigger
+      language plpgsql
+      security definer
+      set search_path = public
+      as $body$
+      declare raw text; masked text;
+      begin
+        raw := new.%2$I;
+        masked := public.censor_text(raw);
+        -- Assigned from the text, never from the caller, so a hand-made
+        -- POST cannot mark its own message as already filtered.
+        new.censored := masked is distinct from raw;
+        if new.censored then
+          new.%2$I := masked;
+        end if;
+        %3$s
+        return new;
+      end;
+      $body$;
+    $f$,
+    r.tbl, r.col,
+    case when r.keep_raw then $keep$
+        -- Only chat keeps the raw text: the reader chooses whether to
+        -- look past the mask. Nothing else can ask for it back.
+        new.original_content := case when new.censored then raw else null end;$keep$
+         else '' end);
+  end loop;
+end $$;
+
+alter table public.messages
+  add column if not exists censored boolean not null default false,
+  add column if not exists original_content text;
+alter table public.reviews
+  add column if not exists censored boolean not null default false;
+alter table public.profiles
+  add column if not exists censored boolean not null default false;
+alter table public.provider_profiles
+  add column if not exists censored boolean not null default false;
+alter table public.provider_services
+  add column if not exists censored boolean not null default false;
+
+-- messages is deliberately not narrowed to "of content": the trigger is
+-- what decides the flag and the raw copy, so it has to run on every
+-- write to the row.
+drop trigger if exists censor_text on public.messages;
+create trigger censor_text
+  before insert or update on public.messages
+  for each row execute function public.censor_messages();
+
+drop trigger if exists censor_text on public.reviews;
+create trigger censor_text
+  before insert or update of content on public.reviews
+  for each row execute function public.censor_reviews();
+
+drop trigger if exists censor_text on public.profiles;
+create trigger censor_text
+  before insert or update of bio on public.profiles
+  for each row execute function public.censor_profiles();
+
+drop trigger if exists censor_text on public.provider_profiles;
+create trigger censor_text
+  before insert or update of description on public.provider_profiles
+  for each row execute function public.censor_provider_profiles();
+
+drop trigger if exists censor_text on public.provider_services;
+create trigger censor_text
+  before insert or update of service_name on public.provider_services
+  for each row execute function public.censor_provider_services();
+
+-- ------------------------------------------------------------
+-- Blocking an account outright
+-- ------------------------------------------------------------
+
+alter table public.profiles add column if not exists blocked boolean not null default false;
+
+create or replace function public.is_blocked()
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare v_found boolean;
+begin
+  select exists (
+    select 1 from public.profiles p
+    where p.id = auth.uid() and p.blocked
+  ) into v_found;
+  return coalesce(v_found, false);
+end;
+$$;
+
+revoke all on function public.is_blocked() from public;
+grant execute on function public.is_blocked() to anon, authenticated;
+
+create or replace function public.guard_blocked_writer()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if public.caller_can_moderate() then
+    return new;
+  end if;
+  if public.is_blocked() then
+    raise exception 'this account is blocked from posting on Pedyo'
+      using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+
+do $$
+declare t text;
+begin
+  foreach t in array array['messages','reviews','conversations','provider_profiles',
+                           'provider_services','verification_requests']
+  loop
+    execute format('drop trigger if exists blocked_writer_guard on public.%I', t);
+    execute format('create trigger blocked_writer_guard before insert or update on public.%I for each row execute function public.guard_blocked_writer()', t);
+  end loop;
+end $$;
+
+-- A blocked account must not be able to keep uploading either.
+drop policy if exists "storage_profiles_owner_write" on storage.objects;
+create policy "storage_profiles_owner_write" on storage.objects
+  for all to authenticated using (
+    bucket_id = 'profiles'
+    and (storage.foldername(name))[1] = 'avatars'
+    and (storage.foldername(name))[2] = auth.uid()::text
+    and not public.is_blocked()
+  ) with check (
+    bucket_id = 'profiles'
+    and (storage.foldername(name))[1] = 'avatars'
+    and (storage.foldername(name))[2] = auth.uid()::text
+    and not public.is_blocked()
+  );
+
+drop policy if exists "storage_providers_owner_write" on storage.objects;
+create policy "storage_providers_owner_write" on storage.objects
+  for all to authenticated using (
+    bucket_id = 'providers'
+    and exists (
+      select 1 from public.provider_profiles pp
+      where pp.id = (storage.foldername(name))[2]::uuid
+        and pp.user_id = auth.uid()
+    )
+    and not public.is_blocked()
+  ) with check (
+    bucket_id = 'providers'
+    and exists (
+      select 1 from public.provider_profiles pp
+      where pp.id = (storage.foldername(name))[2]::uuid
+        and pp.user_id = auth.uid()
+    )
+    and not public.is_blocked()
+  );
+
+drop policy if exists "storage_verification_owner_write" on storage.objects;
+create policy "storage_verification_owner_write" on storage.objects
+  for insert to authenticated with check (
+    bucket_id = 'verification-docs'
+    and (storage.foldername(name))[2] = auth.uid()::text
+    and not public.is_blocked()
+  );
+
+-- Blocking is an admin decision, so the self-update policy must not be
+-- able to lift its own block. Rewritten to add that check to the one
+-- that already protects is_admin.
+create or replace function public.guard_profiles_privileges()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if public.caller_can_moderate() then
+    return new;
+  end if;
+  if new.is_admin is distinct from old.is_admin then
+    raise exception 'only an administrator can change the admin flag'
+      using errcode = '42501';
+  end if;
+  if new.blocked is distinct from old.blocked then
+    raise exception 'only an administrator can block or unblock an account'
+      using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+
+-- ------------------------------------------------------------
+-- Automatic review moderation
+--
+-- Groq reads new reviews on a schedule, inside the database. The
+-- judgement cannot live in the browser: a review is posted by whoever
+-- wrote it, so anything they run is a speed bump rather than a guard.
+--
+-- pg_net is asynchronous by design — a request queued inside a
+-- transaction only leaves with its background worker once that
+-- transaction commits — so one pass is two jobs. "submit" hands a
+-- batch to Groq and remembers the request id; "collect" reads the
+-- verdicts back and applies them. A hidden review therefore lags its
+-- submission by up to a minute.
+-- ------------------------------------------------------------
+
+-- pg_net installs its objects as supabase_admin, so a REVOKE from postgres
+-- leaves those entries in place — Supabase hands anon and authenticated
+-- USAGE on the schema by design. What actually keeps the moderation key
+-- out of reach is elsewhere: PostgREST only serves the public schema, so
+-- net.* and vault.* are not addressable over the API at all (checked:
+-- both 404), the key itself lives in Vault, and the helpers below are not
+-- executable by anon. The revokes are still attempted, because a grant
+-- this role can remove is one it should not have.
+revoke all on schema net from public, anon, authenticated, service_role;
+revoke execute on all functions in schema net from public, anon, authenticated, service_role;
+revoke all on all tables in schema net from public, anon, authenticated, service_role;
+revoke all on all sequences in schema net from public, anon, authenticated, service_role;
+grant usage on schema net to postgres;
+grant all on all tables in schema net to postgres;
+grant all on all sequences in schema net to postgres;
+
+-- 'unchecked' is the state a new review starts in and the state an
+-- unanswered one stays in, so a pass that never came back is retried.
+alter table public.reviews add column if not exists moderation_status text
+  not null default 'unchecked'
+  check (moderation_status in ('unchecked','clean','flagged'));
+alter table public.reviews add column if not exists moderation_category text
+  check (moderation_category in ('hate','harassment','sexual','pii','spam','off_topic','other','none'));
+alter table public.reviews add column if not exists moderation_note text;
+alter table public.reviews add column if not exists moderated_at timestamptz;
+
+create index if not exists reviews_needs_moderation_idx
+  on public.reviews (created_at) where moderation_status = 'unchecked';
+
+-- A verdict belongs to the words that were there when it was given. If
+-- the customer edits the review, it has to be judged again.
+create or replace function public.recheck_review_moderation()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if new.content is distinct from old.content then
+    new.moderation_status := 'unchecked';
+    new.moderation_category := null;
+    new.moderation_note := null;
+    new.moderated_at := null;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists review_recheck on public.reviews;
+create trigger review_recheck
+  before update of content on public.reviews
+  for each row execute function public.recheck_review_moderation();
+
+-- One row per Groq call. It is the audit trail for the automation
+-- itself: what was sent, whether an answer came back, what it did.
+create table if not exists public.moderation_pass (
+  id           bigint generated always as identity primary key,
+  request_id   bigint,
+  review_ids   uuid[] not null default '{}',
+  submitted    integer not null default 0,
+  applied      integer not null default 0,
+  hidden_count integer not null default 0,
+  status       text not null default 'submitted'
+                 check (status in ('submitted','done','failed','timeout')),
+  detail       text,
+  created_at   timestamptz not null default now(),
+  collected_at timestamptz
+);
+
+alter table public.moderation_pass enable row level security;
+
+drop policy if exists moderation_pass_admin_read on public.moderation_pass;
+create policy moderation_pass_admin_read on public.moderation_pass
+  for select to authenticated using (public.is_admin());
+
+grant select on public.moderation_pass to authenticated;
+
+create or replace function public.moderation_prompt()
+returns text
+language sql
+immutable
+as $$
+  select $rubric$You are the moderator of public reviews on Pedyo, a Zimbabwean marketplace where customers write about local providers. Decide only whether a review may be published.
+
+Hide a review when it does one of these:
+- attacks a person with abuse, insults or slurs instead of describing the service;
+- is sexual, or sexual about someone;
+- exposes private details such as a phone number, home address, national ID or bank account;
+- is not a review at all — advertising, a link to something else, or filler;
+- threatens anyone or encourages harm.
+
+Do not hide a review merely because it is negative, angry, low-rated, complains about prices, or is spelled badly. Criticism of a bad job is what reviews exist for. If the text is unclear, publish it. Words already masked with asterisks (b****) are filtered profanity: judge the sentence around them, not the mask.
+
+Answer for every review you are given and for no others. Reply with JSON only:
+{"verdicts":[{"id":"<review id>","harmful":true,"category":"hate|harassment|sexual|pii|spam|off_topic|other","note":"<at most 12 words for the admin log>"}]}
+For a review you would publish use "harmful":false and "category":"none".$rubric$::text
+$$;
+
+-- Queues the oldest unchecked reviews. Returns how many were handed over.
+create or replace function public.moderation_submit(p_limit integer default 25)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_limit integer;
+  v_ids   uuid[];
+  v_items jsonb;
+  v_key   text;
+  v_req   bigint;
+begin
+  -- Bounded because every review costs prompt tokens and the Groq tier
+  -- this account sits on is capped at tokens per minute.
+  v_limit := least(greatest(coalesce(p_limit, 25), 1), 40);
+
+  select array_agg(id) into v_ids from (
+    select id
+      from public.reviews
+     where moderation_status = 'unchecked'
+       and content is not null
+       and length(trim(content)) > 0
+     order by created_at
+     limit v_limit
+  ) batch;
+
+  if v_ids is null then
+    return 0;
+  end if;
+
+  select decrypted_secret into v_key
+    from vault.decrypted_secrets
+   where name = 'pedyo_groq_moderation_key';
+
+  if v_key is null then
+    insert into public.moderation_pass (status, detail, collected_at, submitted, review_ids)
+    values ('failed', 'no moderation key in the vault', now(), coalesce(array_length(v_ids, 1), 0), v_ids);
+    return 0;
+  end if;
+
+  select jsonb_agg(jsonb_build_object(
+           'id', b.id::text,
+           'rating', b.rating,
+           'text', left(b.content, 300)
+         ))
+    into v_items
+    from (
+      select id, rating, content
+        from public.reviews
+       where id = any(v_ids)
+    ) b;
+
+  v_req := net.http_post(
+    'https://api.groq.com/openai/v1/chat/completions',
+    jsonb_build_object(
+      'model', 'openai/gpt-oss-120b',
+      'messages', jsonb_build_array(
+        jsonb_build_object('role', 'system', 'content', public.moderation_prompt()),
+        jsonb_build_object('role', 'user', 'content', 'REVIEWS ' || v_items::text)
+      ),
+      'temperature', 0,
+      'max_tokens', 1500,
+      'response_format', jsonb_build_object('type', 'json_object')
+    ),
+    '{}'::jsonb,
+    jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || v_key
+    ),
+    25000
+  );
+
+  insert into public.moderation_pass (request_id, review_ids, submitted)
+  values (v_req, v_ids, array_length(v_ids, 1));
+
+  return array_length(v_ids, 1);
+end;
+$$;
+
+-- Applies whatever Groq has answered since the last sweep. A pass whose
+-- review the model did not mention stays 'unchecked' and is sent again.
+create or replace function public.moderation_collect()
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  p          record;
+  v_resp     record;
+  v_answer   jsonb;
+  v_verdicts jsonb;
+  v_row      record;
+  v_harm     boolean;
+  v_applied  integer;
+  v_hidden   integer;
+  v_total    integer := 0;
+begin
+  for p in
+    select * from public.moderation_pass
+     where status = 'submitted'
+     order by created_at
+  loop
+    select * into v_resp from net._http_response where id = p.request_id;
+
+    if not found then
+      if p.created_at < now() - interval '10 minutes' then
+        update public.moderation_pass
+           set status = 'timeout', collected_at = now(),
+               detail = 'Groq never answered'
+         where id = p.id;
+      end if;
+      continue;
+    end if;
+
+    if v_resp.status_code is distinct from 200 then
+      update public.moderation_pass
+         set status = 'failed', collected_at = now(),
+             detail = left('groq ' || v_resp.status_code::text || ' ' || coalesce(v_resp.error_msg, ''), 200)
+       where id = p.id;
+      continue;
+    end if;
+
+    begin
+      v_answer := ((v_resp.content::jsonb -> 'choices' -> 0 -> 'message' ->> 'content'))::jsonb;
+      v_verdicts := v_answer -> 'verdicts';
+      if jsonb_typeof(v_verdicts) <> 'array' then
+        raise exception 'the answer carried no verdicts array';
+      end if;
+    exception when others then
+      -- A model that answers in prose instead of JSON must not be
+      -- mistaken for a model that found nothing to hide.
+      update public.moderation_pass
+         set status = 'failed', collected_at = now(),
+             detail = left('unreadable answer: ' || sqlerrm, 200)
+       where id = p.id;
+      continue;
+    end;
+
+    v_applied := 0;
+    v_hidden := 0;
+
+    for v_row in
+      -- The id is cast only when it already looks like a uuid, so a
+      -- model that invents one cannot abort the sweep on a cast error.
+      select case when v ->> 'id' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                  then (v ->> 'id')::uuid end as rid,
+             case when v ->> 'harmful' in ('true','false')
+                  then (v ->> 'harmful')::boolean end as harm,
+             left(coalesce(v ->> 'category', ''), 24) as category,
+             left(coalesce(v ->> 'note', ''), 200) as note
+        from jsonb_array_elements(v_verdicts) as v
+       where jsonb_typeof(v) = 'object'
+    loop
+      -- An id this pass never sent is dropped, the same rule the
+      -- concierge applies to a slug it was never offered.
+      if v_row.rid is null or v_row.harm is null or not (v_row.rid = any(p.review_ids)) then
+        continue;
+      end if;
+
+      -- hidden = (hidden or harm): the moderator can hide a review,
+      -- never reveal one an administrator hid by hand.
+      update public.reviews
+         set moderation_status = case when v_row.harm then 'flagged' else 'clean' end,
+             moderation_category = nullif(v_row.category, ''),
+             moderation_note = nullif(v_row.note, ''),
+             moderated_at = now(),
+             hidden = hidden or v_row.harm
+       where id = v_row.rid
+         and moderation_status = 'unchecked';
+
+      if found then
+        v_applied := v_applied + 1;
+        if v_row.harm then
+          v_hidden := v_hidden + 1;
+          -- The nil uuid is the automation: no person made this call,
+          -- and the log should not pretend otherwise.
+          insert into public.audit_log (admin_id, action, target_id, meta)
+          values ('00000000-0000-0000-0000-000000000000'::uuid,
+                  'review.auto_hide', v_row.rid::text,
+                  jsonb_build_object(
+                    'actor', 'automoderator',
+                    'model', 'openai/gpt-oss-120b',
+                    'category', nullif(v_row.category, ''),
+                    'note', nullif(v_row.note, '')));
+        end if;
+      end if;
+    end loop;
+
+    update public.moderation_pass
+       set status = 'done', collected_at = now(), applied = v_applied, hidden_count = v_hidden,
+           detail = case when v_applied < p.submitted
+                         then left('the model answered for ' || v_applied || ' of ' || p.submitted
+                                  || ' reviews; the rest are queued again', 200) end
+     where id = p.id;
+
+    v_total := v_total + v_hidden;
+  end loop;
+
+  return v_total;
+end;
+$$;
+
+-- An administrator's "check them now". The role check is stricter than
+-- caller_can_moderate() on purpose: an anonymous request carries role
+-- 'anon' and would pass that helper, and nobody outside the admin team
+-- should be able to spend this account's Groq quota.
+create or replace function public.moderation_run_now(p_limit integer default 25)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_role text;
+begin
+  v_role := coalesce(auth.jwt() ->> 'role', '');
+  if v_role = 'anon' or (v_role = 'authenticated' and not public.is_admin()) then
+    raise exception 'only an administrator can run the moderator'
+      using errcode = '42501';
+  end if;
+  return public.moderation_submit(p_limit);
+end;
+$$;
+
+-- The human override: a machine that hid a review is not the last word.
+create or replace function public.restore_review(p_review_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'only an administrator can restore a review'
+      using errcode = '42501';
+  end if;
+  update public.reviews
+     set hidden = false, moderation_status = 'clean',
+         moderation_category = null, moderation_note = null, moderated_at = now()
+   where id = p_review_id
+     and hidden = true;
+  if not found then
+    raise exception 'that review is not hidden'
+      using errcode = 'P0002';
+  end if;
+  insert into public.audit_log (admin_id, action, target_id, meta)
+  values (auth.uid(), 'review.restore', p_review_id::text,
+          jsonb_build_object('overturned', 'automoderator'));
+end;
+$$;
+
+-- Functions are executable by PUBLIC until told otherwise, and these
+-- two queue HTTP calls and rewrite reviews.
+revoke execute on function public.moderation_submit(integer)  from public, anon, authenticated, service_role;
+revoke execute on function public.moderation_collect()       from public, anon, authenticated, service_role;
+revoke execute on function public.moderation_run_now(integer) from public, anon;
+revoke execute on function public.restore_review(uuid)        from public, anon;
+grant execute on function public.moderation_run_now(integer) to authenticated;
+grant execute on function public.restore_review(uuid) to authenticated;
+
+-- Every 30 minutes, whatever the server's timezone: a half-hour
+-- interval is the same clock in Africa/Harare as it is in UTC.
+select cron.schedule('pedyo-moderation-submit', '*/30 * * * *',
+  $cmd$select public.moderation_submit(25)$cmd$);
+select cron.schedule('pedyo-moderation-collect', '* * * * *',
+  $cmd$select public.moderation_collect()$cmd$);
+

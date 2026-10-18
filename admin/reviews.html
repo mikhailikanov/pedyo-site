@@ -22,6 +22,22 @@
 <p>Hide or unhide customer reviews</p>
 </div>
 <div id="reviews-alert"></div>
+<div class="card" style="margin-bottom:24px">
+<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between">
+<div>
+<p style="font-size:0.875rem;font-weight:700;margin-bottom:4px">Automatic check</p>
+<p id="moderation-summary" style="font-size:0.8rem;color:var(--color-text-muted)">Loading…</p>
+<p id="moderation-pass" style="margin-top:6px;font-size:0.75rem;color:var(--color-text-muted)"></p>
+</div>
+<button class="btn btn-sm btn-primary" id="run-moderation-btn" style="align-self:flex-start" type="button">Check new reviews now</button>
+</div>
+</div>
+<div class="tabs" id="reviews-tabs" style="margin-bottom:24px">
+<button class="tab-btn active" data-filter="all" type="button">All</button>
+<button class="tab-btn" data-filter="unchecked" type="button">Not checked</button>
+<button class="tab-btn" data-filter="flagged" type="button">Flagged</button>
+<button class="tab-btn" data-filter="hidden" type="button">Hidden</button>
+</div>
 <div id="reviews-list">
 <div style="text-align:center;padding:40px"><div class="spinner" style="margin:0 auto"></div></div>
 </div>
@@ -31,9 +47,10 @@
 <script type="module">
     import { renderNav } from '/assets/js/nav-html.js';
     import { initNav } from '/assets/js/nav.js';
-    import { requireAdmin, getAllReviews, toggleReviewVisibility } from '/assets/js/admin.js';
+    import { requireAdmin, getAllReviews, toggleReviewVisibility, getReviewModerationStats,
+             getModerationPasses, runModerationNow, restoreReview } from '/assets/js/admin.js';
     import { renderAdminSidebar } from '/assets/js/shared-nav.js';
-    import { escapeHtml, formatDate, renderStars, showAlert } from '/assets/js/ui.js';
+    import { escapeHtml, formatDate, formatTime, renderStars, showAlert, setLoading } from '/assets/js/ui.js';
 
     document.getElementById('nav-placeholder').innerHTML = renderNav('');
     initNav();
@@ -41,16 +58,49 @@
     if (!adminUser) throw new Error();
     document.getElementById('admin-sidebar').innerHTML = renderAdminSidebar('reviews');
 
+    const alertEl = document.getElementById('reviews-alert');
+    const runBtn = document.getElementById('run-moderation-btn');
+    const CATEGORIES = {
+      hate: 'Hate speech', harassment: 'Harassment', sexual: 'Sexual content',
+      pii: 'Private details', spam: 'Spam', off_topic: 'Off topic', other: 'Other'
+    };
+    const CHECKS = {
+      unchecked: ['badge-gray', 'Not checked'],
+      clean: ['badge-green', 'Clean'],
+      flagged: ['badge-red', 'Flagged']
+    };
+
     let currentPage = 1;
+    let currentFilter = 'all';
     const LIMIT = 20;
+
+    async function loadSummary() {
+      const [stats, passes] = await Promise.all([getReviewModerationStats(), getModerationPasses(3)]);
+      document.getElementById('moderation-summary').textContent =
+        `${stats.flagged} flagged · ${stats.clean} clean · ${stats.unchecked} not checked yet. ` +
+        `A pass runs every 30 minutes and hides what it flags.`;
+      const passEl = document.getElementById('moderation-pass');
+      if (!passes.length) {
+        passEl.textContent = 'No automatic pass has run yet.';
+        return;
+      }
+      const latest = passes[0];
+      const waiting = passes.filter(p => p.status === 'submitted').length;
+      const outcome = latest.status === 'done'
+        ? `${latest.applied} of ${latest.submitted} judged, ${latest.hidden_count} hidden`
+        : `${latest.status}${latest.detail ? ' — ' + latest.detail : ''}`;
+      passEl.textContent = `Last pass ${formatTime(latest.created_at)}: ${outcome}.`
+        + (waiting ? ` ${waiting} still waiting for an answer.` : '');
+    }
 
     async function loadReviews(page = 1) {
       currentPage = page;
-      const { reviews, total } = await getAllReviews({ page, limit: LIMIT });
+      const { reviews, total } = await getAllReviews({ page, limit: LIMIT, filter: currentFilter });
       const listEl = document.getElementById('reviews-list');
 
       if (!reviews.length) {
-        listEl.innerHTML = '<div class="empty-state"><p>No reviews found.</p></div>';
+        listEl.innerHTML = `<div class="empty-state"><p>No reviews in this view.</p></div>`;
+        document.getElementById('pagination').innerHTML = '';
         return;
       }
 
@@ -64,44 +114,57 @@
                 <th>Rating</th>
                 <th>Review</th>
                 <th>Date</th>
+                <th>Check</th>
                 <th>Status</th>
                 <th>Action</th>
               </tr>
             </thead>
             <tbody>
-              ${reviews.map(r => `
+              ${reviews.map(r => {
+                const check = CHECKS[r.moderation_status] || CHECKS.unchecked;
+                return `
                 <tr id="review-row-${r.id}">
                   <td style="font-size:0.875rem">${escapeHtml(r.profiles?.full_name || 'Anonymous')}</td>
                   <td style="font-size:0.875rem">${escapeHtml(r.provider_profiles?.business_name || 'N/A')}</td>
                   <td>${renderStars(r.rating)}</td>
-                  <td style="max-width:250px;font-size:0.8rem">${escapeHtml(r.content || '—')}</td>
+                  <td style="max-width:250px;font-size:0.8rem">${escapeHtml(r.content || '—')}${r.censored ? ' <span class="badge badge-gold">Filtered</span>' : ''}</td>
                   <td style="font-size:0.75rem;color:var(--color-text-muted)">${formatDate(r.created_at)}</td>
-                  <td>${r.hidden ? '<span class="badge badge-red">Hidden</span>' : '<span class="badge badge-green">Visible</span>'}</td>
-                  <td>
-                    <button class="btn btn-sm ${r.hidden ? 'btn-primary' : 'btn-danger'} toggle-review-btn"
-                            data-id="${r.id}" data-hidden="${r.hidden}">
-                      ${r.hidden ? 'Unhide' : 'Hide'}
-                    </button>
+                  <td style="font-size:0.75rem;white-space:nowrap">
+                    <span class="badge ${check[0]}">${check[1]}</span>
+                    ${r.moderation_status === 'flagged' ? `<div style="margin-top:4px;color:var(--color-text-muted)">${escapeHtml(CATEGORIES[r.moderation_category] || 'Flagged')}${r.moderation_note ? ' — ' + escapeHtml(r.moderation_note) : ''}</div>` : ''}
                   </td>
-                </tr>`).join('')}
+                  <td>${r.hidden ? '<span class="badge badge-red">Hidden</span>' : '<span class="badge badge-green">Visible</span>'}</td>
+                  <td style="white-space:nowrap">
+                    ${r.hidden
+                      ? `<button class="btn btn-sm btn-primary ${r.moderation_status === 'flagged' ? 'restore-review-btn' : 'unhide-review-btn'}"
+                             data-id="${r.id}">${r.moderation_status === 'flagged' ? 'Restore' : 'Unhide'}</button>`
+                      : `<button class="btn btn-sm btn-danger hide-review-btn" data-id="${r.id}">Hide</button>`}
+                  </td>
+                </tr>`;
+              }).join('')}
             </tbody>
           </table>
         </div>`;
 
-      listEl.querySelectorAll('.toggle-review-btn').forEach(btn => {
-        btn.addEventListener('click', async () => {
-          const hidden = btn.dataset.hidden === 'true';
-          try {
-            await toggleReviewVisibility(btn.dataset.id, !hidden, adminUser.id);
-            showAlert(document.getElementById('reviews-alert'), `Review ${!hidden ? 'hidden' : 'unhidden'}.`, 'success');
-            loadReviews(currentPage);
-          } catch (err) {
-            showAlert(document.getElementById('reviews-alert'), err.message || 'Failed.');
-          }
-        });
+      listEl.querySelectorAll('.hide-review-btn').forEach(btn => {
+        btn.addEventListener('click', () => run(async () => {
+          await toggleReviewVisibility(btn.dataset.id, true, adminUser.id);
+          return 'Review hidden.';
+        }));
+      });
+      listEl.querySelectorAll('.unhide-review-btn').forEach(btn => {
+        btn.addEventListener('click', () => run(async () => {
+          await toggleReviewVisibility(btn.dataset.id, false, adminUser.id);
+          return 'Review visible again.';
+        }));
+      });
+      listEl.querySelectorAll('.restore-review-btn').forEach(btn => {
+        btn.addEventListener('click', () => run(async () => {
+          await restoreReview(btn.dataset.id);
+          return 'Automatic flag overturned — review is visible and marked clean.';
+        }));
       });
 
-      // Pagination
       const pages = Math.ceil(total / LIMIT);
       const pagEl = document.getElementById('pagination');
       pagEl.innerHTML = pages > 1 ? Array.from({ length: pages }, (_, i) => i + 1)
@@ -110,6 +173,47 @@
       pagEl.querySelectorAll('.page-btn').forEach(b => b.addEventListener('click', () => loadReviews(+b.dataset.page)));
     }
 
+    // Every row action ends with a reload, so the buttons have no text of
+    // their own to restore — a shared spinner on the clicked button only
+    // adds state the next render throws away.
+    async function run(action) {
+      try {
+        showAlert(alertEl, await action(), 'success');
+        await Promise.all([loadReviews(currentPage), loadSummary()]);
+      } catch (err) {
+        showAlert(alertEl, err.message || 'Failed.');
+      }
+    }
+
+    document.getElementById('reviews-tabs').addEventListener('click', e => {
+      const btn = e.target.closest('.tab-btn');
+      if (!btn || btn.classList.contains('active')) return;
+      document.querySelectorAll('#reviews-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentFilter = btn.dataset.filter;
+      loadReviews(1);
+    });
+
+    runBtn.addEventListener('click', async () => {
+      setLoading(runBtn, true, 'Sending…');
+      try {
+        const sent = await runModerationNow(25);
+        showAlert(alertEl, sent
+          ? `${sent} review${sent === 1 ? '' : 's'} sent for a check. Answers arrive within a minute.`
+          : 'Nothing is waiting for a check.', sent ? 'success' : 'info');
+        await loadSummary();
+      } catch (err) {
+        showAlert(alertEl, err.message || 'Could not start a check.');
+      } finally {
+        setLoading(runBtn, false, 'Check new reviews now');
+      }
+    });
+
+    try {
+      await loadSummary();
+    } catch (err) {
+      showAlert(alertEl, err.message || 'Could not load the moderation summary.');
+    }
     loadReviews();
   </script>
 </body>

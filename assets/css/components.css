@@ -388,10 +388,23 @@
   border-bottom-left-radius: var(--radius-sm);
   align-self: flex-start;
 }
+/* Quiet on purpose: the mask is the default view, and this is the
+   reader's way back, not a call to action. */
+.msg-unmask {
+  display: block; margin-top: var(--space-2);
+  padding: 0; border: none; background: none;
+  color: var(--color-text-muted);
+  font-size: 0.75rem; font-family: inherit; font-weight: 600;
+  text-decoration: underline; text-underline-offset: 2px;
+  cursor: pointer;
+}
+.msg-unmask:hover { color: var(--green-dark); }
 
 /* ── Provider concierge ── */
 .ai-dock {
-  position: fixed; right: 20px; bottom: 20px;
+  /* Parked above the strip a chat composer needs (~82px), so the launcher never
+     floats over the Send button on the messages pages. */
+  position: fixed; right: 20px; bottom: 104px;
   z-index: 900;
   display: flex; flex-direction: column; align-items: flex-end;
   font-family: var(--font-sans);
@@ -402,15 +415,25 @@
   border: none; border-radius: var(--radius-full);
   background: var(--grad-brand); color: #fff;
   font-size: var(--font-size-sm); font-weight: 700; letter-spacing: -0.01em;
-  cursor: pointer;
+  cursor: grab;
+  /* touch-action:none alone is not enough on touch: a long press also raises the
+     iOS callout and starts a text selection, and either one fires pointercancel,
+     which ends the drag before it begins. Both are switched off here so a finger
+     drag moves the dock the same way a mouse drag does. */
+  touch-action: none; -webkit-touch-callout: none;
+  user-select: none; -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
   box-shadow: var(--shadow-glow);
   transition: transform var(--transition), box-shadow var(--transition);
 }
+.ai-launcher.dragging { cursor: grabbing; transition: none; }
 .ai-launcher:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(21,122,90,0.36); }
 .ai-launcher:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .ai-panel {
   width: min(372px, calc(100vw - 32px));
-  height: min(520px, calc(100vh - 96px));
+  /* Leaves room for the launcher strip above it so the open panel never
+     overflows the top of a short viewport. */
+  height: min(520px, calc(100vh - 150px));
   display: flex; flex-direction: column;
   background: #fff;
   border: 1px solid var(--color-border);
@@ -496,7 +519,7 @@
 .ai-send:hover { background: var(--green-dark); }
 .ai-send:disabled { opacity: 0.45; cursor: default; }
 @media (max-width: 560px) {
-  .ai-dock { right: 12px; bottom: 12px; align-items: flex-end; }
+  .ai-dock { right: 12px; bottom: 96px; align-items: flex-end; }
   .ai-panel { height: min(70vh, 480px); }
 }
 

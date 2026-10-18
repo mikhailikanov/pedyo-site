@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Blocked Words – Pedyo Admin</title>
+<link href="/assets/images/logo/pedyo-mark.svg" rel="icon" type="image/svg+xml"/>
+<link href="/assets/css/reset.css" rel="stylesheet"/>
+<link href="/assets/css/tokens.css" rel="stylesheet"/>
+<link href="/assets/css/components.css" rel="stylesheet"/>
+<link href="/assets/css/layout.css" rel="stylesheet"/>
+<link href="/assets/css/pages.css" rel="stylesheet"/>
+</head>
+<body class="page-wrapper">
+<div id="nav-placeholder"></div>
+<div class="dashboard-layout">
+<nav class="sidebar" id="admin-sidebar"></nav>
+<main class="dashboard-main">
+<div class="dashboard-header">
+<h1>Blocked Words</h1>
+<p>Every message, review and listing is masked against this list in the database. Changes apply from the next write.</p>
+</div>
+<div class="card" style="margin-bottom:24px">
+<form id="term-form" style="display:flex;flex-wrap:wrap;gap:var(--space-4);align-items:flex-end" autocomplete="off">
+<div class="form-group" style="flex:1;min-width:180px">
+<label class="form-label" for="term-input">Add a word</label>
+<input class="form-input" id="term-input" maxlength="40" placeholder="e.g. mboro" type="text"/>
+</div>
+<div class="form-group" style="width:150px">
+<label class="form-label" for="term-language">Language</label>
+<select class="form-select" id="term-language">
+<option value="en">English</option>
+<option value="sn">Shona</option>
+</select>
+</div>
+<button class="btn btn-primary" id="term-add-btn" style="align-self:flex-end" type="submit">Block</button>
+</form>
+</div>
+<div id="terms-alert"></div>
+<div id="terms-list">
+<div style="text-align:center;padding:40px"><div class="spinner" style="margin:0 auto"></div></div>
+</div>
+</main>
+</div>
+<script type="module">
+    import { renderNav } from '/assets/js/nav-html.js';
+    import { initNav } from '/assets/js/nav.js';
+    import { requireAdmin, getBlockedTerms, addBlockedTerm, removeBlockedTerm } from '/assets/js/admin.js';
+    import { renderAdminSidebar } from '/assets/js/shared-nav.js';
+    import { escapeHtml, formatDate, showAlert } from '/assets/js/ui.js';
+
+    document.getElementById('nav-placeholder').innerHTML = renderNav('');
+    initNav();
+    const adminUser = await requireAdmin();
+    if (!adminUser) throw new Error();
+    document.getElementById('admin-sidebar').innerHTML = renderAdminSidebar('terms');
+
+    const LANGUAGES = { en: 'English', sn: 'Shona' };
+    const alertEl = document.getElementById('terms-alert');
+
+    function render(terms) {
+      const listEl = document.getElementById('terms-list');
+      if (!terms.length) {
+        listEl.innerHTML = '<div class="empty-state"><p>No words are blocked.</p></div>';
+        return;
+      }
+      const groups = ['en', 'sn'].filter(l => terms.some(t => t.language === l));
+      listEl.innerHTML = groups.map(lang => `
+        <div class="table-wrap" style="margin-bottom:24px">
+          <table>
+            <thead>
+              <tr>
+                <th>${LANGUAGES[lang]} (${terms.filter(t => t.language === lang).length})</th>
+                <th>Added</th>
+                <th style="width:110px">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${terms.filter(t => t.language === lang).map(t => `
+                <tr>
+                  <td style="font-weight:600">${escapeHtml(t.term)}</td>
+                  <td style="font-size:0.8rem;color:var(--color-text-muted)">${formatDate(t.created_at)}</td>
+                  <td><button class="btn btn-sm btn-danger remove-term-btn" data-id="${escapeHtml(t.id)}" data-term="${escapeHtml(t.term)}">Remove</button></td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`).join('');
+
+      listEl.querySelectorAll('.remove-term-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          try {
+            await removeBlockedTerm(btn.dataset.id, btn.dataset.term, adminUser.id);
+            showAlert(alertEl, `“${btn.dataset.term}” is no longer blocked.`, 'success');
+            load();
+          } catch (err) {
+            showAlert(alertEl, err.message || 'Could not remove that word.');
+          }
+        });
+      });
+    }
+
+    async function load() {
+      try {
+        render(await getBlockedTerms());
+      } catch (err) {
+        showAlert(alertEl, err.message || 'Could not load the list.');
+      }
+    }
+
+    document.getElementById('term-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const input = document.getElementById('term-input');
+      try {
+        await addBlockedTerm(input.value, document.getElementById('term-language').value, adminUser.id);
+        input.value = '';
+        showAlert(alertEl, 'Word blocked.', 'success');
+        input.focus();
+        load();
+      } catch (err) {
+        showAlert(alertEl, err.message || 'Could not block that word.');
+      }
+    });
+
+    load();
+  </script>
+</body>
+</html>

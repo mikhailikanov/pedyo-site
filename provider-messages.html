@@ -102,6 +102,7 @@
           <div><div style="font-weight:700">${escapeHtml(name)}</div><div style="font-size:0.75rem;color:var(--color-text-muted)">${escapeHtml(listing ? 'About ' + listing : 'Customer')}</div></div>
         </div>
         <div class="chat-messages" id="chat-messages"></div>
+        <div class="chat-error hidden" id="chat-error"></div>
         <div class="chat-input-area">
           <textarea class="chat-input" id="chat-input" placeholder="Reply to customer…" rows="1"></textarea>
           <button class="btn btn-primary" id="send-btn">Send</button>
@@ -118,14 +119,24 @@
       await refreshState();
 
       async function doSend() {
-        const content = document.getElementById('chat-input').value.trim();
+        const input = document.getElementById('chat-input');
+        const content = input.value.trim();
         if (!content) return;
-        document.getElementById('chat-input').value = '';
+        input.value = '';
         try {
           const msg = await sendMessage(convId, user.id, content);
+          document.getElementById('chat-error').classList.add('hidden');
           msgsEl.innerHTML += renderMessage(msg, user.id);
           msgsEl.scrollTop = msgsEl.scrollHeight;
-        } catch (err) { console.error(err); }
+        } catch (err) {
+          console.error(err);
+          // A refused send — a blocked account, say — must not swallow what
+          // the provider typed, so the text goes back into the box.
+          input.value = content;
+          const box = document.getElementById('chat-error');
+          box.textContent = err.message || 'Could not send that message.';
+          box.classList.remove('hidden');
+        }
       }
 
       document.getElementById('send-btn').addEventListener('click', doSend);

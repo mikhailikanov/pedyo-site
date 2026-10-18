@@ -23,14 +23,14 @@ by an admin before going public. Both sides can message in-app.
 ```
 /                       public pages (index, search, provider, services, about, contact)
 /account/               auth, profile, become-a-provider, settings
-/admin/                 moderation queue: providers, images, docs, reports, reviews, categories, users
+/admin/                 moderation queue: providers, images, docs, reports, reviews, blocked words, categories, users
 /messages.html          customer side of the account
 /provider-messages.html provider side of the same account
 /functions/ai-chat.js   the concierge proxy — the only server-side code in the repo
 /assets/css/            reset → tokens → components → layout → pages (load order matters)
 /assets/js/             ES modules: supabase-client, auth, identity, nav, assistant, providers,
                         reviews, conversations, storage, notify, icons, ui, admin
-/supabase/schema.sql    tables, RLS, triggers, grants, storage buckets
+/supabase/schema.sql    tables, RLS, triggers, grants, storage buckets, scheduled moderation
 /supabase/seed.sql      demo categories, providers, services, areas, reviews
 ```
 
@@ -55,6 +55,16 @@ without any local backend.
    Both are idempotent — re-running them is safe and will not duplicate rows.
 3. Under Authentication → Providers, either enable "Confirm email" (the signup
    flow expects it) or disable it for local testing.
+4. If you want the scheduled review moderator, give it a separate Groq key and put
+   it in the database vault, where only the `postgres` role can read it:
+
+   ```sql
+   select vault.create_secret('gsk_…', 'pedyo_groq_moderation_key',
+          'Groq key used only by the scheduled review moderator');
+   ```
+
+   Without it nothing breaks: every pass is recorded as
+   `failed — no moderation key in the vault` and the reviews stay visible.
 
 Never put a `service_role` or `sb_secret_...` key in this repo. Everything the
 browser does is meant to be reachable under the RLS policies below.
@@ -171,6 +181,77 @@ leaking geyser in Borrowdale?" with real listings, not prose.
   the conversation. The five starter chips, the "start over" button and `Esc` all behave as
   labelled. It is deliberately absent from `/admin/` and from the five auth pages, which do
   not call `initNav()`.
+- The launcher is parked above the bottom edge and can be dragged or arrow-keyed anywhere on
+  screen; the spot is remembered in `localStorage` under `pedyo_dock_pos`. It floats, so
+  without that clearance it covers the message composer's Send button on `/messages.html`.
+
+## Content protection
+
+Text a user writes is masked **in Postgres**, never in the browser. This is a no-build
+static client over PostgREST, so a filter that ran in `assets/js/` could be skipped by
+hand-crafting the same POST.
+
+- `blocked_terms` holds the word list, tagged `en` or `sn` (Shona). Admins edit it at
+  `/admin/terms.html`; the list itself is readable by admins only, because publishing it
+  would only teach people what to spell around.
+- `censor_text()` masks each match on word boundaries (`\y`, so "ass" never breaks "class"),
+  keeping the first letter and the shape of the word. A per-table `censor_*()` trigger runs
+  it over `messages.content`, `reviews.content`, `profiles.bio`,
+  `provider_profiles.description` and `provider_services.service_name`, and sets
+  `censored = true` when anything changed. Every page already reads those columns, so
+  masking reaches the whole site without a single display change.
+- Only chat keeps the raw text, in `messages.original_content`. The reader of a masked
+  message sees a quiet "Show message" toggle; the writer always sees what they sent.
+  Reviews, bios and listings keep no readable copy.
+- `profiles.blocked` stops an account outright: `guard_blocked_writer()` refuses their
+  inserts on messages, reviews, conversations and listings, the storage policies refuse
+  their uploads, and `guard_profiles_privileges()` stops them lifting their own block.
+  Admins toggle it from the Access column on `/admin/users.html`.
+- Existing rows are not rewritten — the triggers fire on new writes, so old text keeps
+  whatever it had.
+- Every masking rule lives in `supabase/schema.sql`; applying it to a project is
+  `node _tools/run-sql.mjs <file.sql>`, not a deploy.
+
+## Review moderation
+
+The word filter catches a vulgar word; it cannot catch a review that is politely abusive.
+A model reads those, and it runs **inside Postgres** on a schedule, so there is no worker
+to deploy, no cron service to pay for and no API key in the browser.
+
+- Two `pg_cron` jobs, because `pg_net` is asynchronous: a request queued inside a
+  transaction only leaves once that transaction commits. So one pass is two jobs —
+  `pedyo-moderation-submit` (`*/30 * * * *`) sends the oldest 25 unchecked reviews to Groq,
+  `pedyo-moderation-collect` (`* * * * *`) reads whichever answers have landed by then.
+- The moderator has **its own Groq key**, stored in `vault.decrypted_secrets` as
+  `pedyo_groq_moderation_key` and read only by `moderation_submit()`. It is not the
+  concierge key, it is not in this repo, and `anon` cannot query the vault.
+- `moderation_prompt()` is the rubric. Hide personal attacks and slurs, sexual content,
+  somebody's private details, advertising, threats — and explicitly *do not* hide negative,
+  angry, one-star or badly spelled criticism. A bad review is not a moderation problem.
+- A verdict is stored on the review (`moderation_status`, `moderation_category`,
+  `moderation_note`, `moderated_at`), and hiding one moves the listing's `rating_avg` and
+  `review_count` on its own, because `on_review_change` counts only `hidden = false` rows.
+- **The machine can hide, never reveal.** `moderation_collect()` writes
+  `hidden = hidden or harm`, so it cannot undo a decision an admin made. `restore_review()`
+  is the human override: it unhides, marks the review clean and records `review.restore`.
+  Auto-hides are audited under the nil UUID as `review.auto_hide`, with the model name,
+  category and its one-line reason in `meta`.
+- It fails safe. Only a parsed verdict hides anything: an outage, a 429, an answer that is
+  prose instead of JSON, or one that never arrives leaves the reviews `unchecked` and
+  visible, recorded as `failed` or `timeout` in `moderation_pass` — one row per call, which
+  is the audit trail for the automation itself. Unanswered reviews are just sent again.
+- Editing a review returns it to `unchecked` (`review_recheck`): a verdict belongs to the
+  words that were there when it was given.
+- Admins see all of it at `/admin/reviews.html`: per-review check result and reason, the
+  Not checked / Flagged / Hidden filters, the last pass summary, **Check new reviews now**
+  (`moderation_run_now`) and **Restore** (`restore_review`). Those two check `is_admin()`
+  inside the function, and every other piece of the pipeline is revoked from `anon` and
+  `authenticated`. PostgREST only serves the `public` schema, so `net`, `cron` and `vault`
+  are not reachable from the client at all.
+- One pass is bounded: 25 reviews (hard cap 40), 300 characters of each, 1500 tokens back.
+- To look at it: `select status, return_message from cron.job_run_details order by
+  start_time desc limit 20;` and `select * from moderation_pass order by id desc limit 5;`.
+  Changing any of it goes through `node _tools/run-sql.mjs <file.sql>`, not a deploy.
 
 ## Icons
 

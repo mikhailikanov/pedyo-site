@@ -35,7 +35,7 @@
 <script type="module">
     import { renderNav } from '/assets/js/nav-html.js';
     import { initNav } from '/assets/js/nav.js';
-    import { requireAdmin, searchUsers } from '/assets/js/admin.js';
+    import { requireAdmin, searchUsers, setUserBlocked } from '/assets/js/admin.js';
     import { renderAdminSidebar } from '/assets/js/shared-nav.js';
     import { supabase } from '/assets/js/supabase-client.js';
     import { escapeHtml, formatDate, showAlert, debounce } from '/assets/js/ui.js';
@@ -59,7 +59,7 @@
       listEl.innerHTML = `
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Name</th><th>Email</th><th>Joined</th><th>Admin</th><th>Deletion Requested</th></tr></thead>
+            <thead><tr><th>Name</th><th>Email</th><th>Joined</th><th>Admin</th><th>Deletion Requested</th><th>Access</th></tr></thead>
             <tbody>
               ${users.map(u => `
                 <tr>
@@ -68,10 +68,29 @@
                   <td style="font-size:0.8rem;color:var(--color-text-muted)">${formatDate(u.created_at)}</td>
                   <td>${u.is_admin ? '<span class="badge badge-gold">Admin</span>' : '<span class="badge badge-gray">User</span>'}</td>
                   <td>${u.deletion_requested ? '<span class="badge badge-red">Yes</span>' : '—'}</td>
+                  <td>
+                    ${u.blocked ? '<span class="badge badge-red">Blocked</span>' : ''}
+                    ${u.id === adminUser.id ? '' : `<button class="btn btn-sm ${u.blocked ? 'btn-primary' : 'btn-danger'} block-user-btn"
+                       data-id="${escapeHtml(u.id)}" data-blocked="${u.blocked}">${u.blocked ? 'Unblock' : 'Block'}</button>`}
+                  </td>
                 </tr>`).join('')}
             </tbody>
           </table>
         </div>`;
+
+      listEl.querySelectorAll('.block-user-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const blocked = btn.dataset.blocked !== 'true';
+          try {
+            await setUserBlocked(btn.dataset.id, blocked, adminUser.id);
+            showAlert(document.getElementById('users-alert'),
+              blocked ? 'Account blocked. They can no longer post.' : 'Account unblocked.', 'success');
+            doSearch();
+          } catch (err) {
+            showAlert(document.getElementById('users-alert'), err.message || 'Failed.');
+          }
+        });
+      });
     }
 
     document.getElementById('search-btn').addEventListener('click', doSearch);

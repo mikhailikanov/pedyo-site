@@ -9,6 +9,7 @@ export function renderAdminSidebar(active = '') {
     { id: 'verification', href: '/admin/verification.html',     icon: 'clipboard-check',  label: 'Verification Docs' },
     { id: 'reports',      href: '/admin/reports.html',          icon: 'flag',             label: 'Reports' },
     { id: 'reviews',      href: '/admin/reviews.html',          icon: 'star',             label: 'Reviews' },
+    { id: 'terms',        href: '/admin/terms.html',            icon: 'shield-check',     label: 'Blocked Words' },
     { id: 'categories',   href: '/admin/categories.html',       icon: 'folder',           label: 'Categories' },
     { id: 'users',        href: '/admin/users.html',            icon: 'users',            label: 'Users' },
   ];

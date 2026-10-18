@@ -106,6 +106,7 @@
           </div>
         </div>
         <div class="chat-messages" id="chat-messages"></div>
+        <div class="chat-error hidden" id="chat-error"></div>
         <div class="chat-input-area">
           <textarea class="chat-input" id="chat-input" placeholder="Type a message…" rows="1"></textarea>
           <button class="btn btn-primary" id="send-btn">Send</button>
@@ -133,9 +134,18 @@
         chatInput.value = '';
         try {
           const msg = await sendMessage(convId, user.id, content);
+          document.getElementById('chat-error').classList.add('hidden');
           msgsEl.innerHTML += renderMessage(msg, user.id);
           msgsEl.scrollTop = msgsEl.scrollHeight;
-        } catch (err) { console.error(err); }
+        } catch (err) {
+          console.error(err);
+          // A refused send — a blocked account, say — must not swallow what
+          // the customer typed, so the text goes back into the box.
+          chatInput.value = content;
+          const box = document.getElementById('chat-error');
+          box.textContent = err.message || 'Could not send that message.';
+          box.classList.remove('hidden');
+        }
       }
 
       sendBtn.addEventListener('click', doSend);

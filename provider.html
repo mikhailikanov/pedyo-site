@@ -158,7 +158,7 @@
             <div id="reviews-section">
               <h2 style="font-size:1.125rem;font-weight:700;margin-bottom:16px">Reviews</h2>
               <div id="reviews-list"><div class="spinner" style="margin:0 auto"></div></div>
-              ${user && !isOwner ? renderReviewForm() : ''}
+              ${user && !isOwner ? `<div id="review-form-host">${renderReviewForm()}</div>` : ''}
             </div>
           </div>
 
@@ -188,31 +188,46 @@
       `;
 
       // Load reviews
-      const reviews = await getProviderReviews(provider.id);
       const reviewsList = document.getElementById('reviews-list');
-      if (reviews.length) {
-        reviewsList.innerHTML = `<div style="display:flex;flex-direction:column;gap:16px">${reviews.map(r => renderReviewCard(r)).join('')}</div>`;
-      } else {
-        reviewsList.innerHTML = '<p style="color:var(--color-text-muted);font-size:0.875rem">No reviews yet.</p>';
-      }
+      const paintReviews = async () => {
+        const reviews = await getProviderReviews(provider.id);
+        if (reviews.length) {
+          reviewsList.innerHTML = `<div style="display:flex;flex-direction:column;gap:16px">${reviews.map(r => renderReviewCard(r)).join('')}</div>`;
+        } else {
+          reviewsList.innerHTML = '<p style="color:var(--color-text-muted);font-size:0.875rem">No reviews yet.</p>';
+        }
+      };
+      await paintReviews();
 
       // Review form
       if (user && !isOwner) {
-        initStarPicker();
-        document.getElementById('review-form')?.addEventListener('submit', async e => {
-          e.preventDefault();
-          const rating  = +document.getElementById('review-rating').value;
-          const content = document.getElementById('review-content').value.trim();
-          const alertEl = document.getElementById('review-alert');
-          if (!rating) { showAlert(alertEl, 'Please select a star rating.'); return; }
-          try {
-            await submitReview(user.id, provider.id, rating, content);
-            showAlert(alertEl, 'Review submitted!', 'success');
-            document.getElementById('review-form').reset();
-          } catch (err) {
-            showAlert(alertEl, err.message || 'Failed to submit review.');
-          }
-        });
+        const formHost = document.getElementById('review-form-host');
+        // Re-rendering the markup is what clears it: form.reset() leaves the star
+        // picker painted in the last choice, and re-running initStarPicker() on the
+        // same buttons would stack a second set of listeners.
+        const paintReviewForm = () => {
+          formHost.innerHTML = renderReviewForm();
+          initStarPicker();
+          formHost.querySelector('#review-form').addEventListener('submit', async e => {
+            e.preventDefault();
+            const alertEl = formHost.querySelector('#review-alert');
+            const btn = formHost.querySelector('#review-form button[type="submit"]');
+            const rating  = +document.getElementById('review-rating').value;
+            const content = document.getElementById('review-content').value.trim();
+            if (!rating) { showAlert(alertEl, 'Please select a star rating.'); return; }
+            setLoading(btn, true, 'Submitting…');
+            try {
+              await submitReview(user.id, provider.id, rating, content);
+              paintReviewForm();
+              await paintReviews();
+              showAlert(formHost.querySelector('#review-alert'), 'Review submitted — it is live now.', 'success');
+            } catch (err) {
+              showAlert(alertEl, err.message || 'Failed to submit review.');
+              setLoading(btn, false, 'Submit Review');
+            }
+          });
+        };
+        paintReviewForm();
       }
 
       // Message modal
@@ -249,12 +264,19 @@
         const reason = document.getElementById('report-reason').value.trim();
         const alertEl = document.getElementById('report-alert');
         if (!reason) { showAlert(alertEl, 'Please describe the issue.'); return; }
+        const btn = document.getElementById('report-submit-btn');
+        setLoading(btn, true, 'Sending…');
         try {
-          const { supabase: sb } = await import('/assets/js/supabase-client.js');
-          await sb.from('reports').insert({ reporter_id: user.id, target_type: 'provider', target_id: provider.id, reason });
-          document.getElementById('report-modal').classList.add('hidden');
+          const { error } = await supabase
+            .from('reports')
+            .insert({ reporter_id: user.id, target_type: 'provider', target_id: provider.id, reason });
+          if (error) throw error;
+          showAlert(alertEl, 'Report sent. Our team will review it.', 'success');
+          document.getElementById('report-reason').value = '';
+          setTimeout(() => document.getElementById('report-modal').classList.add('hidden'), 1500);
         } catch (err) {
           showAlert(alertEl, err.message || 'Failed to submit report.');
+          setLoading(btn, false, 'Submit Report');
         }
       });
     }

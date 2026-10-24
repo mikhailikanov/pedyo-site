@@ -84,7 +84,8 @@ function paintShell(state) {
       <span id="nav-unread" class="nav-unread hidden">0</span>
     </a>
     <div style="position:relative">
-      <button class="nav-avatar-btn" id="nav-avatar-btn" aria-label="Account menu" aria-haspopup="true">
+      <button class="nav-avatar-btn" id="nav-avatar-btn" aria-label="Account menu" aria-haspopup="true"
+              aria-controls="nav-dropdown" aria-expanded="false">
         ${bubble}
         ${icon('chevron-down', { size: 14 })}
       </button>
@@ -110,12 +111,17 @@ function paintShell(state) {
     </div>
   `;
 
-  document.getElementById('nav-avatar-btn')?.addEventListener('click', e => {
+  const avatarBtn = document.getElementById('nav-avatar-btn');
+  const menu = document.getElementById('nav-dropdown');
+  const setExpanded = (open) => avatarBtn?.setAttribute('aria-expanded', String(open));
+  avatarBtn?.addEventListener('click', e => {
     e.stopPropagation();
-    document.getElementById('nav-dropdown')?.classList.toggle('hidden');
+    if (!menu) return;
+    setExpanded(!menu.classList.toggle('hidden'));
   });
   document.addEventListener('click', () => {
-    document.getElementById('nav-dropdown')?.classList.add('hidden');
+    menu?.classList.add('hidden');
+    setExpanded(false);
   });
 
   document.getElementById('nav-signout')?.addEventListener('click', () => signOut());

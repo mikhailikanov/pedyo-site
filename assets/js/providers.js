@@ -118,9 +118,11 @@ export async function updateProviderProfile(profileId, updates) {
 }
 
 export async function submitForReview(profileId) {
+  // Back in the queue, so the old verdict goes with it: an admin reading a
+  // resubmitted listing must not see a reason that no longer stands.
   const { error } = await supabase
     .from('provider_profiles')
-    .update({ status: 'pending' })
+    .update({ status: 'pending', rejection_reason: null })
     .eq('id', profileId);
   if (error) throw error;
 }

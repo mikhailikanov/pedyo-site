@@ -34,7 +34,7 @@ export function renderNav(activePage = '') {
     <div class="nav-actions" id="nav-actions">
       <!-- Populated by nav.js -->
     </div>
-    <button class="nav-toggle" id="nav-toggle" aria-label="Toggle menu">
+    <button class="nav-toggle" id="nav-toggle" aria-label="Toggle menu" aria-controls="nav-links" aria-expanded="false">
       <span></span><span></span><span></span>
     </button>
   </div>

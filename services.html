@@ -18,7 +18,7 @@
 <main class="main-content">
 <div class="page-hero">
 <h1>Our Services</h1>
-<p>12 categories covering the services you need most in Harare and Chitungwiza</p>
+<p id="categories-count-note">Categories covering the services you need most in Harare and Chitungwiza</p>
 </div>
 <section class="section">
 <div class="container">
@@ -46,6 +46,8 @@
     if (!cats.length) {
       grid.innerHTML = '<p class="text-muted text-center">No categories available yet.</p>';
     } else {
+      document.getElementById('categories-count-note').textContent =
+        `${cats.length} categor${cats.length === 1 ? 'y' : 'ies'} covering the services you need most in Harare and Chitungwiza`;
       // One request, tallied locally. Counting provider_services rows
       // would report services, not businesses.
       const { data: approved } = await supabase

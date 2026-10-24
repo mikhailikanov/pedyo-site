@@ -23,9 +23,12 @@ export async function getPendingProviders() {
 }
 
 export async function approveProvider(profileId, adminId) {
+  // The reason has to go with the rejection: admins approve listings that were
+  // rejected or suspended earlier, and the old note would still show on the
+  // Approved tab and on the public page.
   const { error } = await supabase
     .from('provider_profiles')
-    .update({ status: 'approved', reviewed_by: adminId, reviewed_at: new Date().toISOString() })
+    .update({ status: 'approved', rejection_reason: null, reviewed_by: adminId, reviewed_at: new Date().toISOString() })
     .eq('id', profileId);
   if (error) throw error;
   await logAdminAction(adminId, 'approve_provider', profileId);

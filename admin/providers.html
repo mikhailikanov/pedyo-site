@@ -104,7 +104,7 @@
                 ${escapeHtml(p.profiles?.full_name || '')} · ${escapeHtml(p.profiles?.email || '')}
               </div>
               <p style="font-size:0.875rem;color:var(--color-text);margin-bottom:8px">${escapeHtml(p.description || 'No description')}</p>
-              ${p.rejection_reason ? `<div class="alert alert-error" style="margin-bottom:8px"><span>Rejection reason:</span><span>${escapeHtml(p.rejection_reason)}</span></div>` : ''}
+              ${['rejected', 'suspended'].includes(p.status) && p.rejection_reason ? `<div class="alert alert-error" style="margin-bottom:8px"><span>${p.status === 'suspended' ? 'Suspension reason' : 'Rejection reason'}:</span><span>${escapeHtml(p.rejection_reason)}</span></div>` : ''}
               <div style="font-size:0.75rem;color:var(--color-text-muted)">Submitted ${formatDate(p.created_at)}</div>
             </div>
             <div style="display:flex;flex-direction:column;gap:8px;flex-shrink:0">

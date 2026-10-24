@@ -115,7 +115,10 @@ export function initNavToggle() {
   const toggle = document.querySelector('.nav-toggle');
   const links  = document.querySelector('.nav-links');
   if (!toggle || !links) return;
-  toggle.addEventListener('click', () => links.classList.toggle('open'));
+  toggle.addEventListener('click', () => {
+    const open = links.classList.toggle('open');
+    toggle.setAttribute('aria-expanded', String(open));
+  });
 }
 
 export function initDropdown(triggerSel, dropdownSel) {

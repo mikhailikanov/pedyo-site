@@ -69,7 +69,7 @@ Trusted services,<br/>
 <section class="section" style="background:var(--color-bg)">
 <div class="container">
 <h2 class="section-title text-center">Browse by Service</h2>
-<p class="section-subtitle text-center">12 categories covering the services you need most</p>
+<p class="section-subtitle text-center" id="categories-count-note">Categories covering the services you need most</p>
 <div class="grid-auto" id="categories-grid">
 <div class="category-card" style="opacity:0.5">Loading…</div>
 </div>
@@ -168,6 +168,8 @@ Trusted services,<br/>
       const cats = await loadCategories();
       renderCategoryGrid(cats, document.getElementById('categories-grid'));
       document.getElementById('stat-categories').textContent = cats.length || '—';
+      document.getElementById('categories-count-note').textContent =
+        `${cats.length} categor${cats.length === 1 ? 'y' : 'ies'} covering the services you need most`;
 
       // Populate hero select
       const sel = document.getElementById('hero-category');

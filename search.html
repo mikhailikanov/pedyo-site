@@ -111,6 +111,13 @@
       const verif    = document.querySelector('input[name="verification"]:checked')?.value || '';
       const sort     = document.getElementById('sort-select').value;
 
+      // Mirror the two filters this page reads back on load, so reloading or
+      // sharing the link gives the same list — and "Clear filters" clears the URL too.
+      const url = new URL(location.href);
+      query ? url.searchParams.set('q', query) : url.searchParams.delete('q');
+      category ? url.searchParams.set('category', category) : url.searchParams.delete('category');
+      history.replaceState(null, '', url);
+
       document.getElementById('results-count').textContent = 'Searching…';
       document.getElementById('results-grid').innerHTML = '';
       document.getElementById('results-empty').classList.add('hidden');

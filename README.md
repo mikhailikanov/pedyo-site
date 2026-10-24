@@ -161,6 +161,13 @@ Things that are not obvious from the code and are easy to break:
   read through `is_conversation_member(id)`, which a brand-new row cannot satisfy
   yet, so `insert().select()` fails with a row-level-security error. Insert, then
   look the id up — which is what `startConversation()` does.
+- **One reports queue, four kinds of entry.** `reports.target_type` is `review`,
+  `provider`, `contact` or `developer`. The public pages write all four and read
+  none; `admin/reports.html` lists whatever is `open` and prints the type as a
+  badge, so a new kind needs the check constraint and nothing else. `developer`
+  comes from the "Contact the developers" block on `/contact.html`, which is the
+  one place a visitor can reach the people building the site rather than the
+  support queue.
 
 ## Provider concierge
 

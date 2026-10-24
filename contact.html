@@ -61,6 +61,35 @@
 <a href="https://pedyo-site.pages.dev" style="font-size:0.875rem;color:var(--green)">pedyo-site.pages.dev</a>
 </div>
 </div>
+<div class="card" style="margin-top:32px">
+<h2 style="font-size:1.25rem;font-weight:700;margin-bottom:8px">Contact the developers</h2>
+<p style="font-size:0.875rem;color:var(--color-text-muted);margin-bottom:24px">Spotted something broken, or want a feature on Pedyo? This reaches the people building the site rather than the support queue.</p>
+<form id="dev-form" style="display:flex;flex-direction:column;gap:20px">
+<div class="form-group">
+<label class="form-label" for="dev-name">Your name</label>
+<input class="form-input" id="dev-name" placeholder="Full name" required="" type="text"/>
+</div>
+<div class="form-group">
+<label class="form-label" for="dev-email">Email for the reply</label>
+<input class="form-input" id="dev-email" placeholder="you@example.com" required="" type="email"/>
+</div>
+<div class="form-group">
+<label class="form-label" for="dev-topic">What is it about?</label>
+<select class="form-select" id="dev-topic">
+<option value="bug">Something is broken</option>
+<option value="feature">Feature request</option>
+<option value="other">Other feedback</option>
+</select>
+</div>
+<div class="form-group">
+<label class="form-label" for="dev-message">Message</label>
+<textarea class="form-textarea" id="dev-message" placeholder="What happened, and what did you expect instead?" required="" rows="5"></textarea>
+</div>
+<div id="dev-alert"></div>
+<button class="btn btn-primary" id="dev-submit" type="submit">Send to the developers</button>
+</form>
+<p style="font-size:0.8rem;color:var(--color-text-muted);margin-top:20px">Prefer to go straight to the source? The site's code is public on <a href="https://github.com/mikhailikanov/pedyo-site" rel="noopener noreferrer" target="_blank">GitHub</a>.</p>
+</div>
 </div>
 </section>
 </main>
@@ -95,6 +124,32 @@
         showAlert(alertEl, 'Failed to send message. Please try again.');
       } finally {
         setLoading(btn, false, 'Send Message');
+      }
+    });
+
+    // Developer feedback shares the reports queue with everything else the
+    // public can file, but keeps its own target_type so the admin console can
+    // tell a bug report from a provider dispute at a glance.
+    document.getElementById('dev-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const btn = document.getElementById('dev-submit');
+      const alertEl = document.getElementById('dev-alert');
+      setLoading(btn, true, 'Sending…');
+      try {
+        const topic = document.getElementById('dev-topic').value;
+        const { error } = await supabase.from('reports').insert({
+          target_type: 'developer',
+          reason: `[${topic}] ${document.getElementById('dev-message').value}`,
+          reporter_name: document.getElementById('dev-name').value,
+          reporter_email: document.getElementById('dev-email').value
+        });
+        if (error) throw error;
+        showAlert(alertEl, 'Sent — the developers read every message.', 'success');
+        e.target.reset();
+      } catch (err) {
+        showAlert(alertEl, 'Failed to send. Please try again.');
+      } finally {
+        setLoading(btn, false, 'Send to the developers');
       }
     });
   </script>

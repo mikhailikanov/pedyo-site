@@ -226,7 +226,7 @@ create index if not exists reviews_provider_idx on public.reviews (provider_prof
 
 -- ------------------------------------------------------------
 -- reports
--- target_id is polymorphic (review | provider | contact) so it
+-- target_id is polymorphic (review | provider | contact | developer) so it
 -- must NOT carry a foreign key. reporter_id is nullable because
 -- the public contact form submits signed-out.
 -- ------------------------------------------------------------
@@ -236,7 +236,7 @@ create table if not exists public.reports (
   reporter_id    uuid references public.profiles(id) on delete set null,
   reporter_name  text,
   reporter_email text,
-  target_type    text not null check (target_type in ('review','provider','contact')),
+  target_type    text not null check (target_type in ('review','provider','contact','developer')),
   target_id      uuid,
   reason         text not null,
   status         text not null default 'open' check (status in ('open','resolved')),

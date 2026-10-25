@@ -207,10 +207,18 @@ page?" with a link to that page.
   the proxy caps both dumps at `MAX_CANDIDATES` / `MAX_PAGES`. The proxy logs total tokens, so
   the headroom is visible before raising either cap. A 429 from Groq is returned as 429, which
   the panel reports as "busy, try again in a few seconds" instead of a broken assistant.
+  Measured on the free tier (8000 tokens/min): a full question is ~2500 tokens, so the key
+  carries **about three concierge questions a minute** — past that Groq answers 429 and the
+  panel asks the visitor to wait. Anyone load-testing it should expect that, not a bug.
 - **Retired model ids are the usual outage.** `llama-3.3-70b-versatile` no longer resolves
   on this account; the working ids at time of writing are `openai/gpt-oss-120b` (default),
   `openai/gpt-oss-20b` and `qwen/qwen3.8-27b`. Override without a code change with the
   `GROQ_MODEL` binding, and check `GET /openai/v1/models` when it starts answering 502.
+  A 502 that comes and goes is not the deploy: it means Groq returned a non-429 error, and
+  the reason is in the Pages Function log as `Groq <status>: <body>`. It lands mostly on the
+  first question after the function has been idle, so the panel retries a 502 once, ~1s later,
+  and only reports the failure if the retry fails too. A 429 is never retried — that is a
+  metered limit, and hammering it spends the next visitor's headroom.
 - Chat history lives in `sessionStorage`, so clicking through to a listing or a page and back
   keeps the conversation. The six starter chips, the "start over" button and `Esc` all behave
   as labelled. It is deliberately absent from `/admin/` and from the five auth pages, which do

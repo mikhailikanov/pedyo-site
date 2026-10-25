@@ -313,18 +313,27 @@ async function ask(text) {
   let note = '';
   try {
     await ensurePool();   // never send a question with an empty world
-    const res = await fetch('/ai-chat', {
+    // avatar_url is only for the pick cards. Prompt tokens are metered, so
+    // neither a long URL per candidate nor the whole page catalog leaves the
+    // browser: both travel as a shortlist ranked by the customer's own words.
+    const packet = JSON.stringify({
+      messages: turns,
+      candidates: candidatesFor(text).map(({ avatar_url, ...c }) => c),
+      pages: pagesForModel(text)
+    });
+    const post = () => fetch('/ai-chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      // avatar_url is only for the pick cards. Prompt tokens are metered, so
-      // neither a long URL per candidate nor the whole page catalog leaves the
-      // browser: both travel as a shortlist ranked by the customer's own words.
-      body: JSON.stringify({
-        messages: turns,
-        candidates: candidatesFor(text).map(({ avatar_url, ...c }) => c),
-        pages: pagesForModel(text)
-      })
+      body: packet
     });
+    let res = await post();
+    // A 502 means Groq failed the hop, and it is most often the first question
+    // after the function has sat idle. One retry costs nothing and saves the
+    // visitor a dead bubble. A 429 is a metered limit, so it is never retried.
+    if (res.status === 502) {
+      await new Promise(r => setTimeout(r, 900));
+      res = await post();
+    }
     payload = await res.json().catch(() => null);
     if (!res.ok) {
       note = res.status === 503 || payload?.error === 'not_configured'

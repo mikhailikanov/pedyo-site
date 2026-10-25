@@ -28,8 +28,8 @@ by an admin before going public. Both sides can message in-app.
 /provider-messages.html provider side of the same account
 /functions/ai-chat.js   the concierge proxy — the only server-side code in the repo
 /assets/css/            reset → tokens → components → layout → pages (load order matters)
-/assets/js/             ES modules: supabase-client, auth, identity, nav, assistant, providers,
-                        reviews, conversations, storage, notify, icons, ui, admin
+/assets/js/             ES modules: supabase-client, auth, identity, nav, assistant, site-pages,
+                        providers, reviews, conversations, storage, notify, icons, ui, admin
 /supabase/schema.sql    tables, RLS, triggers, grants, storage buckets, scheduled moderation
 /supabase/seed.sql      demo categories, providers, services, areas, reviews
 ```
@@ -173,7 +173,8 @@ Things that are not obvious from the code and are easy to break:
 
 A chat dock in the bottom-right corner of every public page (`assets/js/assistant.js`,
 mounted from `initNav()` so no page has to carry the markup). It answers "who can fix a
-leaking geyser in Borrowdale?" with real listings, not prose.
+leaking geyser in Borrowdale?" with real listings, not prose, and "is there a contact us
+page?" with a link to that page.
 
 - **The key never reaches the browser.** The panel POSTs to `/ai-chat`;
   `functions/ai-chat.js` holds `GROQ_API_KEY` as a Pages environment binding and makes the
@@ -182,24 +183,37 @@ leaking geyser in Borrowdale?" with real listings, not prose.
   that the concierge is not connected.
 - **It cannot invent a business.** The prompt is closed-world: the model only sees the
   approved listings the browser found in Supabase (`searchProviders`, `status='approved'`,
-  best-rated first, cached for the tab) and replies with `{reply, picks:[slug]}`. Every slug
-  is checked back against that list, and the panel builds links by looking the slug up in
-  its own pool, so an unknown slug renders nothing.
+  best-rated first, cached for the tab) and replies with `{reply, picks:[slug], links:[path]}`.
+  Every slug is checked back against that list, and the panel builds links by looking the slug
+  up in its own pool, so an unknown slug renders nothing.
+- **It knows the site's own pages.** `assets/js/site-pages.js` is a hard-coded catalog —
+  every core page plus one entry per `/services/<category>.html` file that exists. Asking for a
+  page ("where do I reset my password", "take me to the about page") is answered on the spot
+  from that catalog, without a Groq call, so it also works when the proxy is down. Everything
+  else travels the same closed-world route as listings: the browser sends a shortlist of the
+  pages the customer's words point at as `body.pages`, the model may answer with `links`, and a
+  path is kept only if the client sent it — twice checked, in the proxy and again in the panel.
+  The catalog is hard-coded so an admin adding a thirteenth category cannot make the concierge
+  link to a 404.
+- **A trade question is still a trade question.** Matching the catalog is gated on wayfinding
+  words ("where is", "is there a page", "take me to"), and a category match alone falls
+  through, so "where can I find a plumber" answers with listings rather than the Plumbing page.
 - **Nothing to recommend is a real answer.** With few or no approved listings the concierge
-  says so and points at the Services page rather than guessing — the same holds for a job
-  no listing covers.
+  says so and links the Services page rather than guessing — the same holds for a job no
+  listing covers.
 - **Costs are bounded by prompt size.** Groq metered accounts are capped on tokens per
   minute and every candidate costs prompt tokens, so the browser forwards a 12-listing
-  shortlist ranked by the customer's own words and the proxy caps the dump at
-  `MAX_CANDIDATES`. A 429 from Groq is returned as 429, which the panel reports as "busy,
-  try again in a few seconds" instead of a broken assistant.
+  shortlist ranked by the customer's own words, a 16-page shortlist ranked the same way, and
+  the proxy caps both dumps at `MAX_CANDIDATES` / `MAX_PAGES`. The proxy logs total tokens, so
+  the headroom is visible before raising either cap. A 429 from Groq is returned as 429, which
+  the panel reports as "busy, try again in a few seconds" instead of a broken assistant.
 - **Retired model ids are the usual outage.** `llama-3.3-70b-versatile` no longer resolves
   on this account; the working ids at time of writing are `openai/gpt-oss-120b` (default),
   `openai/gpt-oss-20b` and `qwen/qwen3.8-27b`. Override without a code change with the
   `GROQ_MODEL` binding, and check `GET /openai/v1/models` when it starts answering 502.
-- Chat history lives in `sessionStorage`, so clicking through to a listing and back keeps
-  the conversation. The five starter chips, the "start over" button and `Esc` all behave as
-  labelled. It is deliberately absent from `/admin/` and from the five auth pages, which do
+- Chat history lives in `sessionStorage`, so clicking through to a listing or a page and back
+  keeps the conversation. The six starter chips, the "start over" button and `Esc` all behave
+  as labelled. It is deliberately absent from `/admin/` and from the five auth pages, which do
   not call `initNav()`.
 - The launcher is parked above the bottom edge and can be dragged or arrow-keyed anywhere on
   screen; the spot is remembered in `localStorage` under `pedyo_dock_pos`. It floats, so

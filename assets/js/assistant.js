@@ -4,10 +4,12 @@
 // holds it and makes the upstream call. This panel only ever receives slugs
 // that it sent out, and it renders links by looking them up in `pool`, so a
 // hallucinated business cannot become a link here even if the proxy let one
-// through.
+// through. Site pages work the same way: the catalog in site-pages.js travels
+// with the question and a returned path is dropped unless it is in that list.
 import { icon } from './icons.js';
 import { escapeHtml } from './ui.js';
 import { searchProviders } from './providers.js';
+import { pagesForModel, pageByPath, requestedPages } from './site-pages.js';
 
 const STORE_KEY = 'pedyo_concierge';
 const POS_KEY = 'pedyo_dock_pos';
@@ -19,9 +21,9 @@ const MAX_POOL = 40;
 const SEND_MAX = 12;
 const MAX_TURNS = 12;
 
-const CHIPS = ['A leaking geyser', 'Solar for my shop', 'House rewiring', 'Office cleaning', 'A driver today'];
+const CHIPS = ['A leaking geyser', 'Solar for my shop', 'House rewiring', 'Office cleaning', 'A driver today', 'Contact us page'];
 
-const WELCOME = 'Tell me what needs doing — the trade, and where you are. I only suggest providers with an approved Pedyo listing, and never a price or a phone number.';
+const WELCOME = 'Tell me what needs doing — the trade, and where you are. I suggest providers with an approved Pedyo listing and I can point you to any page on the site. I never give a price or a phone number.';
 
 // Words that describe asking rather than the job, so they cannot pull in
 // every listing that happens to mention "service".
@@ -53,7 +55,7 @@ export function mountAssistant() {
         <span class="ai-head-icon">${icon('sparkles', { size: 16 })}</span>
         <div class="ai-head-text">
           <strong>Service concierge</strong>
-          <small id="ai-scope">Live Pedyo listings only</small>
+          <small id="ai-scope">Live listings and every site page</small>
         </div>
         <button class="ai-head-btn" id="ai-reset" type="button" aria-label="Start a new conversation">${icon('plus', { size: 15 })}</button>
         <button class="ai-head-btn" id="ai-close" type="button" aria-label="Close the concierge">${icon('x', { size: 16 })}</button>
@@ -242,8 +244,8 @@ async function loadPool() {
 function paintScope() {
   const el = root?.querySelector('#ai-scope');
   if (el) el.textContent = pool.length
-    ? `Answers from ${pool.length} live listing${pool.length === 1 ? '' : 's'}`
-    : 'Live Pedyo listings only';
+    ? `${pool.length} live listing${pool.length === 1 ? '' : 's'} and every site page`
+    : 'Live listings and every site page';
 }
 
 function words(text) {
@@ -276,6 +278,27 @@ function candidatesFor(text) {
 
 async function ask(text) {
   turns = [...turns, { role: 'user', content: text }].slice(-MAX_TURNS);
+
+  // Asking for a page has a certain answer, so it is served from the catalog
+  // without a model call: no tokens, no latency, and it still works when Groq
+  // is down. A trade question matches only category pages, and those fall
+  // through so the visitor gets real listings rather than a directory page.
+  const nav = requestedPages(text);
+  if (nav.length && !nav[0].category) {
+    const names = nav.map(p => p.title);
+    turns = [...turns, {
+      role: 'assistant',
+      content: names.length === 1
+        ? `Yes — the ${names[0]} page is on Pedyo. Open it from the link below.`
+        : `Yes — Pedyo has both ${names[0]} and ${names[1]}. Open them from the links below.`,
+      picks: [],
+      links: nav.map(p => p.path)
+    }].slice(-MAX_TURNS);
+    paint();
+    writeStore();
+    return;
+  }
+
   busy = true;
   paint();
   writeStore();
@@ -294,13 +317,18 @@ async function ask(text) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       // avatar_url is only for the pick cards. Prompt tokens are metered, so
-      // a long URL per candidate never leaves the browser.
-      body: JSON.stringify({ messages: turns, candidates: candidatesFor(text).map(({ avatar_url, ...c }) => c) })
+      // neither a long URL per candidate nor the whole page catalog leaves the
+      // browser: both travel as a shortlist ranked by the customer's own words.
+      body: JSON.stringify({
+        messages: turns,
+        candidates: candidatesFor(text).map(({ avatar_url, ...c }) => c),
+        pages: pagesForModel(text)
+      })
     });
     payload = await res.json().catch(() => null);
     if (!res.ok) {
       note = res.status === 503 || payload?.error === 'not_configured'
-        ? 'The concierge is not connected yet, so I cannot answer. The Services page lists everything by trade in the meantime.'
+        ? 'The concierge is not connected yet, so I cannot answer about providers. Ask me for a page by name and I can still link it, or use the Services page to browse by trade.'
         : res.status === 429
           ? 'The concierge is busy right now — give it a few seconds and ask again.'
           : 'Something went wrong reaching the concierge. Try again in a moment.';
@@ -323,9 +351,20 @@ async function ask(text) {
     return;
   }
 
-  turns = [...turns, { role: 'assistant', content: payload.reply, picks: payload.picks || [] }].slice(-MAX_TURNS);
+  turns = [...turns, { role: 'assistant', content: payload.reply, picks: payload.picks || [], links: knownLinks(payload.links) }].slice(-MAX_TURNS);
   paint();
   writeStore();
+}
+
+// The proxy already checks paths against the catalog it received, but a link
+// that is not in this browser's list would render as a dead chip, so the panel
+// filters again on its own copy of the truth.
+function knownLinks(paths) {
+  return (Array.isArray(paths) ? paths : [])
+    .map(pageByPath)
+    .filter(Boolean)
+    .slice(0, 3)
+    .map(p => p.path);
 }
 
 function bySlug(slug) {
@@ -347,27 +386,41 @@ function pickCard(c) {
     </a>`;
 }
 
+function pageChip(p) {
+  return `
+    <a class="ai-page" href="${escapeHtml(p.path)}">
+      <span class="ai-page-icon">${icon(p.icon, { size: 15 })}</span>
+      <span class="ai-page-body">
+        <span class="ai-page-title">${escapeHtml(p.title)}</span>
+        <span class="ai-page-hint">${escapeHtml(p.hint)}</span>
+      </span>
+    </a>`;
+}
+
 function paint(transient) {
   if (!log) return;
   // Answers are part of `turns`, so they survive clicking through to a listing.
   // `transient` is a bubble that never entered the conversation — an apology
   // for a turn that did not land — and disappears on the next send.
   log.innerHTML =
-    botBubble(WELCOME) +
+    botBubble({ text: WELCOME }) +
     turns.map(t => t.role === 'user'
       ? `<div class="ai-msg ai-msg-me"><div class="ai-bubble">${escapeHtml(t.content).replace(/\n/g, '<br>')}</div></div>`
-      : botBubble(t.content, t.picks)).join('') +
-    (transient ? botBubble(transient.text, [], true) : '');
+      : botBubble({ text: t.content, picks: t.picks, links: t.links })).join('') +
+    (transient ? botBubble({ text: transient.text, error: true }) : '');
   log.scrollTop = log.scrollHeight;
   const send = root.querySelector('.ai-send');
   if (send) send.disabled = busy;
 }
 
-function botBubble(text, picks = [], error = false) {
+function botBubble({ text, picks = [], links = [], error = false }) {
+  const cards = picks.map(s => { const c = bySlug(s); return c ? pickCard(c) : ''; }).join('');
+  const pages = links.map(pageByPath).filter(Boolean).map(pageChip).join('');
   return `
     <div class="ai-msg ai-msg-bot">
       <div class="ai-bubble${error ? ' ai-bubble-err' : ''}">${escapeHtml(text).replace(/\n/g, '<br>')}</div>
-      ${picks.length ? `<div class="ai-picks">${picks.map(s => { const c = bySlug(s); return c ? pickCard(c) : ''; }).join('')}</div>` : ''}
+      ${cards ? `<div class="ai-picks">${cards}</div>` : ''}
+      ${pages ? `<div class="ai-pages">${pages}</div>` : ''}
     </div>`;
 }
 
@@ -378,7 +431,12 @@ function readStore() {
       ? raw
           .filter(t => (t.role === 'user' || t.role === 'assistant') && typeof t.content === 'string')
           .slice(-MAX_TURNS)
-          .map(t => ({ role: t.role, content: t.content, picks: Array.isArray(t.picks) ? t.picks : [] }))
+          .map(t => ({
+            role: t.role,
+            content: t.content,
+            picks: Array.isArray(t.picks) ? t.picks : [],
+            links: knownLinks(t.links)
+          }))
       : [];
   } catch {
     return [];
